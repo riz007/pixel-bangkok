@@ -1,0 +1,20 @@
+{
+  "id": "wat-arun",
+  "name": { "en": "Wat Arun & Chao Phraya riverside", "th": "วัดอรุณฯ และริมแม่น้ำเจ้าพระยา" },
+  "crs": "EPSG:32647",
+  "center": { "lon": 100.4897, "lat": 13.7437 },
+  "width_m": 500,
+  "height_m": 500,
+  "source": {
+    "provider": "OpenStreetMap",
+    "dataset": "OpenStreetMap via Overpass API",
+    "licence": "ODbL 1.0",
+    "attribution": "© OpenStreetMap contributors",
+    "attribution_url": "https://www.openstreetmap.org/copyright",
+    "overpass_endpoints": [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.private.coffee/api/interpreter",
+      "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    ]
+  }
+}

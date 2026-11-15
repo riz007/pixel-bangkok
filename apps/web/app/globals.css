@@ -1,0 +1,485 @@
+:root {
+  --night: #1b1f2a;
+  --night-raised: #262c3b;
+  --line: #3d4660;
+  --cream: #f3ead6;
+  --sand: #d9c9a3;
+  --temple: #d9773c;
+  --river: #5a9bbf;
+  --ink: #14161d;
+  --shadow: 4px 4px 0 var(--ink);
+  --font: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Noto Sans Thai", monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--night);
+  color: var(--cream);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+a {
+  color: var(--river);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--temple);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100dvh;
+}
+
+.app__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: var(--night-raised);
+  border-bottom: 2px solid var(--line);
+  position: relative;
+  z-index: 3;
+}
+
+.app__header h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--temple);
+}
+
+.app__area {
+  margin-left: 12px;
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--sand);
+}
+
+.app__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  justify-content: flex-end;
+}
+
+.app__main {
+  position: relative;
+  min-height: 0;
+}
+
+.app__message {
+  max-width: 34rem;
+  margin: 12vh auto 0;
+  padding: 20px;
+  border: 2px solid var(--line);
+  background: var(--night-raised);
+  box-shadow: var(--shadow);
+}
+
+.app__message h2 {
+  margin-top: 0;
+  color: var(--temple);
+}
+
+.app__detail {
+  font-size: 0.8rem;
+  color: var(--sand);
+  overflow-wrap: anywhere;
+}
+
+.app__message button,
+.credits button {
+  padding: 6px 14px;
+  border: 2px solid var(--ink);
+  background: var(--temple);
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+
+.app__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 16px;
+  font-size: 0.75rem;
+  background: var(--night-raised);
+  border-top: 2px solid var(--line);
+}
+
+.text-button {
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: var(--river);
+  text-decoration: underline;
+}
+
+.area-select select,
+.poi-search input {
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 2px solid var(--line);
+  background: var(--night);
+}
+
+.poi-search {
+  position: relative;
+  flex: 0 1 320px;
+}
+
+.poi-search input {
+  width: 100%;
+}
+
+.poi-search__results {
+  position: absolute;
+  inset: 100% 0 auto 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 2px solid var(--line);
+  background: var(--night-raised);
+  box-shadow: var(--shadow);
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.poi-search__results button {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.poi-search__results button:hover,
+.poi-search__results button:focus-visible {
+  background: var(--line);
+}
+
+.poi-search__thai {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--sand);
+}
+
+.poi-search__empty {
+  padding: 8px 10px;
+  color: var(--sand);
+}
+
+.map,
+.map__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.map__canvas {
+  background: var(--night);
+  touch-action: none;
+}
+
+.map__markers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.map[data-status="loading"] .map__markers,
+.map[data-status="error"] .map__markers {
+  visibility: hidden;
+}
+
+.marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 44px;
+  margin: -44px 0 0 -18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+}
+
+.marker__pin {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--ink);
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.marker__pin::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 10px;
+  margin: 2px 0 0 -1px;
+  background: var(--ink);
+}
+
+.marker__label {
+  position: absolute;
+  left: 42px;
+  top: 6px;
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  background: var(--night-raised);
+  color: var(--cream);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  visibility: hidden;
+}
+
+.marker:hover .marker__label,
+.marker:focus-visible .marker__label,
+.marker[aria-pressed="true"] .marker__label {
+  visibility: visible;
+}
+
+.marker:focus-visible {
+  outline: none;
+}
+
+.marker:focus-visible .marker__pin {
+  outline: 3px solid var(--temple);
+  outline-offset: 2px;
+}
+
+.marker[aria-pressed="true"] {
+  z-index: 1;
+}
+
+.marker[aria-pressed="true"] .marker__pin {
+  background: var(--temple);
+  border-width: 3px;
+  transform: scale(1.2);
+  transform-origin: bottom center;
+}
+
+.map__controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.map__controls button,
+.icon-button {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.map__controls button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.map__status,
+.map__notice {
+  position: absolute;
+  left: 50%;
+  margin: 0;
+  padding: 8px 14px;
+  border: 2px solid var(--line);
+  background: var(--night-raised);
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+}
+
+.map__status {
+  top: 40%;
+}
+
+.map__status--error {
+  border-color: var(--temple);
+}
+
+.map__notice {
+  top: 12px;
+  font-size: 0.8rem;
+}
+
+.poi-panel {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 2px solid var(--ink);
+  background: var(--night-raised);
+  box-shadow: var(--shadow);
+  z-index: 2;
+}
+
+.poi-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.poi-panel__category {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--temple);
+}
+
+.poi-panel .icon-button {
+  width: 32px;
+  height: 32px;
+  box-shadow: none;
+}
+
+.poi-panel h2 {
+  margin: 6px 0 0;
+  font-size: 1.15rem;
+}
+
+.poi-panel__thai {
+  margin: 2px 0 0;
+  color: var(--sand);
+}
+
+.poi-panel__meta,
+.credits dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.poi-panel__meta dt,
+.credits dt {
+  color: var(--sand);
+}
+
+.poi-panel__meta dd,
+.credits dd {
+  margin: 0;
+}
+
+.credits {
+  width: min(30rem, calc(100% - 32px));
+  padding: 20px;
+  border: 2px solid var(--ink);
+  background: var(--night-raised);
+  color: var(--cream);
+  box-shadow: var(--shadow);
+}
+
+.credits h2 {
+  margin-top: 0;
+  color: var(--temple);
+}
+
+.credits form {
+  margin-top: 16px;
+  text-align: right;
+}
+
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background: rgb(10 12 18 / 70%);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 640px) {
+  .app__header {
+    padding: 8px 12px;
+  }
+
+  .app__area {
+    display: block;
+    margin-left: 0;
+  }
+
+  .poi-search {
+    flex-basis: 100%;
+  }
+
+  .poi-panel {
+    max-height: 45%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .marker__pin {
+    transition: transform 120ms ease-out;
+  }
+}

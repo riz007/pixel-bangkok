@@ -1,0 +1,17 @@
+{
+  "name": "pixel-bangkok",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "pipeline": "uv run --project pipeline pixel-bangkok",
+    "pipeline:test": "cd pipeline && uv run pytest",
+    "pipeline:lint": "cd pipeline && uv run ruff check . && uv run ruff format --check .",
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm --filter web test",
+    "test:e2e": "pnpm --filter web test:e2e",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm --filter web typecheck",
+    "check": "pnpm pipeline:lint && pnpm pipeline:test && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  }
+}

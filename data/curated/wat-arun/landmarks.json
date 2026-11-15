@@ -1,0 +1,13 @@
+{
+  "description": "Manual overrides for source features, keyed by OSM element ID. Values here are curated, not source-derived; each record states where the value came from.",
+  "landmarks": [
+    {
+      "source_id": "way/23482275",
+      "name_en": "Wat Arun Central Prang",
+      "height_m": 76,
+      "roof_shape": "spire",
+      "note": "Manual. OSM has no height tag; 76 is the value OSM contributors recorded in the feature's 'ele' tag with the description that it follows the temple's official site. Published figures for the prang range from about 67 m to 86 m.",
+      "reference_url": "https://www.openstreetmap.org/way/23482275"
+    }
+  ]
+}

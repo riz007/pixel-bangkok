@@ -1,0 +1,65 @@
+{
+  "description": "Curated points of interest. Coordinates are WGS84 (lon, lat): a point inside the cited OpenStreetMap feature (mean of its vertices).",
+  "pois": [
+    {
+      "id": "wat-arun-central-prang",
+      "name_en": "Wat Arun Central Prang",
+      "name_th": "พระปรางค์วัดอรุณ",
+      "aliases": ["Temple of Dawn", "Wat Arun", "วัดอรุณ", "วัดแจ้ง", "Wat Chaeng"],
+      "category": "temple",
+      "lon": 100.48889,
+      "lat": 13.7437,
+      "description": "The central Khmer-style tower of Wat Arun Ratchawararam, the Temple of Dawn, on the west bank of the Chao Phraya.",
+      "source": "OpenStreetMap way 23482275",
+      "source_url": "https://www.openstreetmap.org/way/23482275"
+    },
+    {
+      "id": "wat-arun-ordination-hall",
+      "name_en": "Wat Arun Ordination Hall",
+      "name_th": "พระอุโบสถ",
+      "aliases": ["Ubosot", "อุโบสถวัดอรุณ"],
+      "category": "temple",
+      "lon": 100.48804,
+      "lat": 13.74436,
+      "description": "The ubosot of Wat Arun, west of the central prang.",
+      "source": "OpenStreetMap way 23482282",
+      "source_url": "https://www.openstreetmap.org/way/23482282"
+    },
+    {
+      "id": "wat-arun-pier",
+      "name_en": "Wat Arun Pier",
+      "name_th": "ท่าเรือวัดอรุณ",
+      "aliases": ["วัดอรุณ", "Tha Wat Arun"],
+      "category": "pier",
+      "lon": 100.48915,
+      "lat": 13.74495,
+      "description": "Riverside pier serving Wat Arun on the west bank.",
+      "source": "OpenStreetMap way 342339407",
+      "source_url": "https://www.openstreetmap.org/way/342339407"
+    },
+    {
+      "id": "tha-tien-pier",
+      "name_en": "Tha Tien Pier",
+      "name_th": "ท่าเตียน",
+      "aliases": ["Tha Tian", "ท่าเรือท่าเตียน"],
+      "category": "pier",
+      "lon": 100.49035,
+      "lat": 13.74578,
+      "description": "East-bank pier opposite Wat Arun, near Wat Pho.",
+      "source": "OpenStreetMap way 1020887825",
+      "source_url": "https://www.openstreetmap.org/way/1020887825"
+    },
+    {
+      "id": "wichai-prasit-fort",
+      "name_en": "Wichai Prasit Fort",
+      "name_th": "ป้อมวิไชยประสิทธิ์",
+      "aliases": ["Wichaiprasit Fort", "Pom Wichai Prasit"],
+      "category": "historic",
+      "lon": 100.49077,
+      "lat": 13.74222,
+      "description": "Historic riverside fort on the west bank at the mouth of Khlong Bangkok Yai.",
+      "source": "OpenStreetMap way 1204519132",
+      "source_url": "https://www.openstreetmap.org/way/1204519132"
+    }
+  ]
+}
