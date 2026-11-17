@@ -87,6 +87,10 @@ class IsoProjection:
         """Distance from the camera along the ground; larger is further away."""
         return -(self.bx * x + self.by * y)
 
+    def screen_ground_matrix(self) -> list[float]:
+        """Shapely affine matrix mapping world (x, y) to (screen x, depth)."""
+        return [self.ax, self.ay, -self.bx, -self.by, 0.0, 0.0]
+
     def master_matrix(self) -> dict[str, list[float]]:
         s = self.upscale
         return {

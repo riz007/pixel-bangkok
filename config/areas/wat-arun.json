@@ -1,8 +1,14 @@
 {
   "id": "wat-arun",
-  "name": { "en": "Wat Arun & Chao Phraya riverside", "th": "วัดอรุณฯ และริมแม่น้ำเจ้าพระยา" },
+  "name": {
+    "en": "Wat Arun & Chao Phraya riverside",
+    "th": "วัดอรุณฯ และริมแม่น้ำเจ้าพระยา"
+  },
   "crs": "EPSG:32647",
-  "center": { "lon": 100.4897, "lat": 13.7437 },
+  "center": {
+    "lon": 100.4897,
+    "lat": 13.7437
+  },
   "width_m": 500,
   "height_m": 500,
   "source": {
@@ -16,5 +22,24 @@
       "https://overpass.private.coffee/api/interpreter",
       "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     ]
+  },
+  "rasters": {
+    "building_heights": {
+      "dataset": "Google Open Buildings 2.5D Temporal",
+      "version": "v1",
+      "year": 2023,
+      "resolution_m": 0.5,
+      "licence": "CC BY 4.0",
+      "attribution": "Building heights: Google Open Buildings 2.5D Temporal",
+      "url": "https://sites.research.google/gr/open-buildings/temporal/"
+    },
+    "tree_canopy": {
+      "dataset": "Meta and WRI High Resolution Canopy Height Maps",
+      "version": "alsgedi_global_v6_float",
+      "resolution_m": 1.0,
+      "licence": "CC BY 4.0",
+      "attribution": "Tree canopy: Meta and World Resources Institute",
+      "url": "https://registry.opendata.aws/dataforgood-fb-forests/"
+    }
   }
 }

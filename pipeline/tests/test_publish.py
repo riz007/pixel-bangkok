@@ -2,12 +2,26 @@ import json
 
 import pytest
 
-from pixel_bangkok.config import ConfigError, parse_area_config, parse_render_config
+from pixel_bangkok.config import (
+    REPO_ROOT,
+    ConfigError,
+    parse_area_config,
+    parse_render_config,
+)
 from pixel_bangkok.projection import IsoProjection
 from pixel_bangkok.publish import project_pois, write_index
 from pixel_bangkok.schemas import PointOfInterest, SchemaError
 
 from .conftest import AREA
+
+CANOPY_SOURCE = {
+    "dataset": "Canopy",
+    "version": "v6",
+    "resolution_m": 1.0,
+    "licence": "CC BY 4.0",
+    "attribution": "Tree canopy: X",
+    "url": "https://example.invalid",
+}
 
 
 def _poi(bounds, x, y, poi_id="p"):
@@ -79,5 +93,16 @@ def test_config_validation(render_config):
         parse_area_config({key: value for key, value in AREA.items() if key != "crs"})
     with pytest.raises(ConfigError, match="missing 'camera'"):
         parse_render_config({})
+    raw = json.loads((REPO_ROOT / "config" / "render.json").read_text())
+    with pytest.raises(ConfigError, match="missing 'trees'"):
+        parse_render_config({key: value for key, value in raw.items() if key != "trees"})
+    with pytest.raises(ConfigError, match="heights.min_height_m must be a number"):
+        parse_render_config({**raw, "heights": {**raw["heights"], "min_height_m": "3"}})
+    with pytest.raises(ConfigError, match="resolution_m must be positive"):
+        parse_area_config(
+            {**AREA, "rasters": {"tree_canopy": {**CANOPY_SOURCE, "resolution_m": 0}}}
+        )
+    area = parse_area_config({**AREA, "rasters": {"tree_canopy": CANOPY_SOURCE}})
+    assert area.tree_canopy is not None and area.building_heights is None
     assert render_config.pixels_per_metre >= 1
     assert render_config.tiles.format in {"webp", "png"}

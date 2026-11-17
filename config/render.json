@@ -1,18 +1,67 @@
 {
-  "camera": { "azimuth_deg": 315, "elevation_deg": 30 },
+  "camera": {
+    "azimuth_deg": 315,
+    "elevation_deg": 30
+  },
   "pixels_per_metre": 3,
   "upscale": 3,
   "max_height_m": 100,
-  "tree_symbol": { "height_m": 6, "canopy_radius_m": 2.5 },
-  "light": { "azimuth_deg": 250, "shadow_length_per_metre": 0.6 },
-  "heights": { "floor_height_m": 3.0, "unknown_height_m": 6.0 },
+  "seed": 20261115,
+  "light": {
+    "azimuth_deg": 250,
+    "shadow_length_per_metre": 0.6
+  },
+  "heights": {
+    "floor_height_m": 3.0,
+    "unknown_height_m": 6.0,
+    "min_height_m": 3.0,
+    "raster_percentile": 75,
+    "raster_presence_threshold": 0.5,
+    "raster_min_area_m2": 1.0
+  },
+  "trees": {
+    "spacing_m": 4.0,
+    "min_canopy_height_m": 3.0,
+    "crown_radius_per_metre": 0.3,
+    "min_crown_radius_m": 1.2,
+    "max_crown_radius_m": 3.5,
+    "default_height_m": 6.0,
+    "default_crown_radius_m": 2.5
+  },
+  "facade": {
+    "window_width_m": 1.2,
+    "window_height_m": 1.4,
+    "window_spacing_m": 3.0,
+    "sill_height_m": 0.9,
+    "parapet_m": 0.6
+  },
+  "roads": {
+    "marking_min_width_m": 6,
+    "dash_m": 2.0,
+    "gap_m": 2.5
+  },
   "road_widths_m": {
-    "motorway": 14, "trunk": 14, "primary": 12, "secondary": 10, "tertiary": 8,
-    "residential": 6, "unclassified": 6, "living_street": 5, "service": 4,
-    "pedestrian": 4, "footway": 2, "path": 2, "steps": 2, "cycleway": 2, "pier": 3,
+    "motorway": 14,
+    "trunk": 14,
+    "primary": 12,
+    "secondary": 10,
+    "tertiary": 8,
+    "residential": 6,
+    "unclassified": 6,
+    "living_street": 5,
+    "service": 4,
+    "pedestrian": 4,
+    "footway": 2,
+    "path": 2,
+    "steps": 2,
+    "cycleway": 2,
+    "pier": 3,
     "default": 4
   },
-  "waterway_widths_m": { "canal": 8, "default": 4 },
+  "waterway_widths_m": {
+    "canal": 8,
+    "default": 4
+  },
   "palette": {
     "background": "#1b1f2a",
     "terrain": "#d9c9a3",
@@ -36,7 +85,25 @@
     "temple_wall_dark": "#cdbf9f",
     "tree": "#3f7a3a",
     "tree_light": "#5c9a4c",
-    "tree_trunk": "#6b4a2f"
+    "tree_trunk": "#6b4a2f",
+    "road_edge": "#6e6e78",
+    "road_marking": "#ece3c4",
+    "building_roof_edge": "#cbbfa9",
+    "window": "#4f6178",
+    "window_temple": "#9a5a2e",
+    "temple_roof_dark": "#b55a2a",
+    "temple_trim": "#e8b83a",
+    "tree_dark": "#2f5f2e",
+    "window_light": "#8fa6bf",
+    "contact_shadow": "#00000038",
+    "terrain_dither": "#cfbe97",
+    "roof_dither": "#d9cdb8",
+    "foam": "#a9d0e3"
   },
-  "tiles": { "tile_size": 512, "overlap": 1, "format": "webp", "lossless": true }
+  "tiles": {
+    "tile_size": 512,
+    "overlap": 1,
+    "format": "webp",
+    "lossless": true
+  }
 }

@@ -22,8 +22,15 @@ export interface TileManifest {
     maxLevel: number;
     levels: TileLevel[];
   };
-  attribution: { text: string; url: string; licence: string; provider: string };
+  attributions: Attribution[];
   source: { dataset: string; retrievedAt: string | null };
+}
+
+export interface Attribution {
+  text: string;
+  url: string;
+  licence: string;
+  provider: string;
 }
 
 export interface PointOfInterest {
@@ -45,7 +52,7 @@ export interface AreaSummary {
   name: { en: string; th: string | null };
 }
 
-export const SUPPORTED_MANIFEST_VERSION = 1;
+export const SUPPORTED_MANIFEST_VERSION = 2;
 
 type Json = Record<string, unknown>;
 
@@ -114,7 +121,17 @@ export function parseManifest(input: unknown): TileManifest {
   }
   const image = object(root.image, "manifest.image");
   const tiles = object(root.tiles, "manifest.tiles");
-  const attribution = object(root.attribution, "manifest.attribution");
+  const attributions = list(root, "attributions", "manifest").map((entry, index) => {
+    const context = `manifest.attributions[${index}]`;
+    const attribution = object(entry, context);
+    return {
+      text: text(attribution, "text", context),
+      url: text(attribution, "url", context),
+      licence: text(attribution, "licence", context),
+      provider: text(attribution, "provider", context),
+    };
+  });
+  if (attributions.length === 0) throw new DataError("manifest.attributions must not be empty");
   const source = object(root.source, "manifest.source");
   const levels = list(tiles, "levels", "manifest.tiles").map((entry, index) => {
     const context = `manifest.tiles.levels[${index}]`;
@@ -150,12 +167,7 @@ export function parseManifest(input: unknown): TileManifest {
       maxLevel,
       levels,
     },
-    attribution: {
-      text: text(attribution, "text", "manifest.attribution"),
-      url: text(attribution, "url", "manifest.attribution"),
-      licence: text(attribution, "licence", "manifest.attribution"),
-      provider: text(attribution, "provider", "manifest.attribution"),
-    },
+    attributions,
     source: {
       dataset: text(source, "dataset", "manifest.source"),
       retrievedAt: optionalText(source, "retrieved_at", "manifest.source"),

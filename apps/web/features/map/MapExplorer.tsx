@@ -86,9 +86,16 @@ export function MapExplorer({ initialAreaId }: { initialAreaId: string | null })
 
       {data && (
         <footer className="app__footer">
-          <a href={data.manifest.attribution.url} target="_blank" rel="noreferrer">
-            {data.manifest.attribution.text}
-          </a>
+          <p className="app__attributions">
+            {data.manifest.attributions.map((attribution, index) => (
+              <span key={attribution.url}>
+                {index > 0 && " · "}
+                <a href={attribution.url} target="_blank" rel="noreferrer">
+                  {attribution.text}
+                </a>
+              </span>
+            ))}
+          </p>
           <CreditsDialog manifest={data.manifest} />
         </footer>
       )}

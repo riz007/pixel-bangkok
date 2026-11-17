@@ -4,7 +4,7 @@ import argparse
 import logging
 import sys
 
-from . import extract, heights, normalise, pixelart, publish, render, tile
+from . import extract, heights, normalise, pixelart, publish, render, tile, trees
 from .config import ConfigError, Paths, load_area_config, load_render_config
 
 STAGES = ("extract", "normalise", "enrich", "render", "style", "tile", "publish")
@@ -19,13 +19,14 @@ def run_stage(stage: str, area_id: str, force: bool) -> None:
     elif stage == "normalise":
         normalise.run(area, config, paths.raw_dir, paths.processed_dir)
     elif stage == "enrich":
-        heights.run(paths.processed_dir, paths.curated_dir, config)
+        heights.run(area, config, paths.raw_dir, paths.processed_dir, paths.curated_dir)
+        trees.run(area, config, paths.raw_dir, paths.processed_dir)
     elif stage == "render":
         render.run(area, config, paths.processed_dir, paths.build_dir)
     elif stage == "style":
         pixelart.run(config, paths.build_dir)
     elif stage == "tile":
-        tile.run(area, config, paths.processed_dir, paths.build_dir)
+        tile.run(area, config, paths.raw_dir, paths.processed_dir, paths.build_dir)
     elif stage == "publish":
         publish.run(area, config, paths.build_dir, paths.curated_dir, paths.publish_dir)
 

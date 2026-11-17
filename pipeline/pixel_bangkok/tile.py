@@ -25,7 +25,7 @@ from .projection import IsoProjection
 
 log = logging.getLogger(__name__)
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 Image.MAX_IMAGE_PIXELS = None
 
 
@@ -69,6 +69,30 @@ def write_pyramid(master: Image.Image, tiles_dir: Path, tiles: TileConfig) -> li
     return levels
 
 
+def attributions(area: AreaConfig, raster_sources_used: tuple[str, ...]) -> list[dict[str, str]]:
+    entries = [
+        {
+            "text": area.source.attribution,
+            "url": area.source.attribution_url,
+            "licence": area.source.licence,
+            "provider": area.source.provider,
+        }
+    ]
+    configured = {"building_heights": area.building_heights, "tree_canopy": area.tree_canopy}
+    for key in raster_sources_used:
+        source = configured.get(key)
+        if source is not None:
+            entries.append(
+                {
+                    "text": source.attribution,
+                    "url": source.url,
+                    "licence": source.licence,
+                    "provider": source.dataset,
+                }
+            )
+    return entries
+
+
 def build_manifest(
     area: AreaConfig,
     render: RenderConfig,
@@ -76,6 +100,7 @@ def build_manifest(
     levels: list[dict[str, int]],
     master_sha256: str,
     source_metadata: dict[str, Any],
+    raster_sources_used: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     bounds = MapBounds.from_area(area)
     projection = IsoProjection.create(bounds, render)
@@ -113,12 +138,7 @@ def build_manifest(
             "upscale": render.upscale,
             "world_to_image": projection.master_matrix(),
         },
-        "attribution": {
-            "text": area.source.attribution,
-            "url": area.source.attribution_url,
-            "licence": area.source.licence,
-            "provider": area.source.provider,
-        },
+        "attributions": attributions(area, raster_sources_used),
         "source": {
             "dataset": area.source.dataset,
             "retrieved_at": source_metadata.get("retrieved_at"),
@@ -131,7 +151,9 @@ def build_manifest(
     }
 
 
-def run(area: AreaConfig, render: RenderConfig, processed_dir: Path, build_dir: Path) -> Path:
+def run(
+    area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Path, build_dir: Path
+) -> Path:
     master_path = build_dir / "master.png"
     if not master_path.exists():
         raise FileNotFoundError(f"{master_path} not found; run the style stage first")
@@ -149,6 +171,9 @@ def run(area: AreaConfig, render: RenderConfig, processed_dir: Path, build_dir: 
         levels,
         hashlib.sha256(master_path.read_bytes()).hexdigest(),
         source_metadata,
+        tuple(
+            key for key in ("building_heights", "tree_canopy") if (raw_dir / f"{key}.tif").exists()
+        ),
     )
     output = build_dir / "manifest.json"
     output.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")

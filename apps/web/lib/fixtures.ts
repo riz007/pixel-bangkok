@@ -1,6 +1,6 @@
 export function manifestFixture() {
   return {
-    version: 1,
+    version: 2,
     area_id: "test-area",
     name: { en: "Test area", th: "พื้นที่ทดสอบ" },
     image: { width: 1000, height: 300 },
@@ -16,12 +16,20 @@ export function manifestFixture() {
         { level: 10, width: 1000, height: 300, columns: 4, rows: 2 },
       ],
     },
-    attribution: {
-      text: "© OpenStreetMap contributors",
-      url: "https://www.openstreetmap.org/copyright",
-      licence: "ODbL 1.0",
-      provider: "OpenStreetMap",
-    },
+    attributions: [
+      {
+        text: "© OpenStreetMap contributors",
+        url: "https://www.openstreetmap.org/copyright",
+        licence: "ODbL 1.0",
+        provider: "OpenStreetMap",
+      },
+      {
+        text: "Building heights: Google Open Buildings 2.5D Temporal",
+        url: "https://sites.research.google/gr/open-buildings/temporal/",
+        licence: "CC BY 4.0",
+        provider: "Google Open Buildings 2.5D Temporal",
+      },
+    ],
     source: { dataset: "OpenStreetMap via Overpass API", retrieved_at: "2026-01-01T00:00:00+00:00" },
   };
 }

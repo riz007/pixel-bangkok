@@ -129,6 +129,8 @@ def classify(element: dict[str, Any], render: RenderConfig) -> tuple[str, bool, 
                 "is_temple": building in TEMPLE_BUILDINGS
                 or tags.get("amenity") == "place_of_worship",
                 "is_tower": tags.get("man_made") in {"tower", "stupa"},
+                "tower_type": tags.get("tower:type")
+                or ("stupa" if tags.get("man_made") == "stupa" else None),
                 "source_height": tags.get("height"),
                 "source_levels": tags.get("building:levels"),
             },
@@ -251,6 +253,7 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
         if extract_metadata_path.exists()
         else {}
     )
+    extract_metadata = extract_metadata.get("osm", extract_metadata)
     layers, stats = normalise(raw, area, render)
     bounds = MapBounds.from_area(area)
     provenance = {

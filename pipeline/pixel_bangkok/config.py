@@ -23,6 +23,17 @@ class SourceConfig:
 
 
 @dataclass(frozen=True)
+class RasterSourceConfig:
+    dataset: str
+    version: str
+    resolution_m: float
+    licence: str
+    attribution: str
+    url: str
+    year: int | None = None
+
+
+@dataclass(frozen=True)
 class AreaConfig:
     id: str
     name_en: str
@@ -33,6 +44,8 @@ class AreaConfig:
     width_m: float
     height_m: float
     source: SourceConfig
+    building_heights: RasterSourceConfig | None = None
+    tree_canopy: RasterSourceConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +57,43 @@ class TileConfig:
 
 
 @dataclass(frozen=True)
+class HeightConfig:
+    floor_height_m: float
+    unknown_height_m: float
+    min_height_m: float
+    raster_percentile: float
+    raster_presence_threshold: float
+    raster_min_area_m2: float
+
+
+@dataclass(frozen=True)
+class TreeConfig:
+    spacing_m: float
+    min_canopy_height_m: float
+    crown_radius_per_metre: float
+    min_crown_radius_m: float
+    max_crown_radius_m: float
+    default_height_m: float
+    default_crown_radius_m: float
+
+
+@dataclass(frozen=True)
+class FacadeConfig:
+    window_width_m: float
+    window_height_m: float
+    window_spacing_m: float
+    sill_height_m: float
+    parapet_m: float
+
+
+@dataclass(frozen=True)
+class RoadStyleConfig:
+    marking_min_width_m: float
+    dash_m: float
+    gap_m: float
+
+
+@dataclass(frozen=True)
 class RenderConfig:
     camera_azimuth_deg: float
     camera_elevation_deg: float
@@ -52,12 +102,13 @@ class RenderConfig:
     max_height_m: float
     light_azimuth_deg: float
     shadow_length_per_metre: float
-    floor_height_m: float
-    unknown_height_m: float
+    seed: int
+    heights: HeightConfig
+    trees: TreeConfig
+    facade: FacadeConfig
+    roads: RoadStyleConfig
     road_widths_m: dict[str, float]
     waterway_widths_m: dict[str, float]
-    tree_height_m: float
-    tree_canopy_radius_m: float
     palette: dict[str, str]
     tiles: TileConfig
 
@@ -99,6 +150,38 @@ def _require(data: dict[str, Any], key: str, context: str) -> Any:
     return data[key]
 
 
+def _floats(section: dict[str, Any], cls: type, context: str) -> Any:
+    names = cls.__dataclass_fields__
+    values = {}
+    for name in names:
+        value = _require(section, name, context)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ConfigError(f"{context}.{name} must be a number")
+        values[name] = float(value)
+    return cls(**values)
+
+
+def _raster_source(data: dict[str, Any], key: str) -> RasterSourceConfig | None:
+    rasters = data.get("rasters") or {}
+    if key not in rasters:
+        return None
+    section = rasters[key]
+    context = f"rasters.{key}"
+    resolution = float(_require(section, "resolution_m", context))
+    if resolution <= 0:
+        raise ConfigError(f"{context}.resolution_m must be positive")
+    year = section.get("year")
+    return RasterSourceConfig(
+        dataset=str(_require(section, "dataset", context)),
+        version=str(_require(section, "version", context)),
+        resolution_m=resolution,
+        licence=str(_require(section, "licence", context)),
+        attribution=str(_require(section, "attribution", context)),
+        url=str(_require(section, "url", context)),
+        year=int(year) if year is not None else None,
+    )
+
+
 def parse_area_config(data: dict[str, Any]) -> AreaConfig:
     center = _require(data, "center", "area config")
     name = _require(data, "name", "area config")
@@ -131,6 +214,8 @@ def parse_area_config(data: dict[str, Any]) -> AreaConfig:
             attribution_url=str(_require(source, "attribution_url", "area source")),
             overpass_endpoints=endpoints,
         ),
+        building_heights=_raster_source(data, "building_heights"),
+        tree_canopy=_raster_source(data, "tree_canopy"),
     )
 
 
@@ -139,7 +224,12 @@ def parse_render_config(data: dict[str, Any]) -> RenderConfig:
     light = _require(data, "light", "render config")
     heights = _require(data, "heights", "render config")
     tiles = _require(data, "tiles", "render config")
-    tree = _require(data, "tree_symbol", "render config")
+    seed = _require(data, "seed", "render config")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise ConfigError("seed must be an integer")
+    height_config = _floats(heights, HeightConfig, "heights")
+    if not 0 <= height_config.raster_percentile <= 100:
+        raise ConfigError("heights.raster_percentile must be between 0 and 100")
     ppm = _require(data, "pixels_per_metre", "render config")
     upscale = _require(data, "upscale", "render config")
     if not isinstance(ppm, int) or not isinstance(upscale, int) or ppm < 1 or upscale < 1:
@@ -162,12 +252,13 @@ def parse_render_config(data: dict[str, Any]) -> RenderConfig:
         max_height_m=float(_require(data, "max_height_m", "render config")),
         light_azimuth_deg=float(_require(light, "azimuth_deg", "light")),
         shadow_length_per_metre=float(_require(light, "shadow_length_per_metre", "light")),
-        floor_height_m=float(_require(heights, "floor_height_m", "heights")),
-        unknown_height_m=float(_require(heights, "unknown_height_m", "heights")),
+        seed=seed,
+        heights=height_config,
+        trees=_floats(_require(data, "trees", "render config"), TreeConfig, "trees"),
+        facade=_floats(_require(data, "facade", "render config"), FacadeConfig, "facade"),
+        roads=_floats(_require(data, "roads", "render config"), RoadStyleConfig, "roads"),
         road_widths_m=dict(_require(data, "road_widths_m", "render config")),
         waterway_widths_m=dict(_require(data, "waterway_widths_m", "render config")),
-        tree_height_m=float(_require(tree, "height_m", "tree_symbol")),
-        tree_canopy_radius_m=float(_require(tree, "canopy_radius_m", "tree_symbol")),
         palette=dict(_require(data, "palette", "render config")),
         tiles=TileConfig(
             tile_size=tile_size,

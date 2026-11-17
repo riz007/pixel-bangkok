@@ -20,26 +20,27 @@ export function CreditsDialog({ manifest }: { manifest: TileManifest }) {
         {...({ closedby: "any" } as object)}
       >
         <h2 id="credits-title">Credits &amp; data</h2>
+        <ul className="credits__sources">
+          {manifest.attributions.map((attribution) => (
+            <li key={attribution.url}>
+              <a href={attribution.url} target="_blank" rel="noreferrer">
+                {attribution.text}
+              </a>{" "}
+              <span className="credits__licence">({attribution.licence})</span>
+            </li>
+          ))}
+        </ul>
+        {retrieved && (
+          <dl>
+            <dt>Map data retrieved</dt>
+            <dd>{retrieved}</dd>
+          </dl>
+        )}
         <p>
-          Map data{" "}
-          <a href={manifest.attribution.url} target="_blank" rel="noreferrer">
-            {manifest.attribution.text}
-          </a>
-          , available under the {manifest.attribution.licence} licence.
-        </p>
-        <dl>
-          <dt>Dataset</dt>
-          <dd>{manifest.source.dataset}</dd>
-          {retrieved && (
-            <>
-              <dt>Retrieved</dt>
-              <dd>{retrieved}</dd>
-            </>
-          )}
-        </dl>
-        <p>
-          The picture is a stylised rendering of that data. Most building heights are not recorded
-          in the source and are drawn at a default height, so the skyline is not to scale.
+          The picture is a stylised drawing of that data. Building heights are mostly estimates
+          from a satellite-derived model, trees are placed where a canopy-height model shows tree
+          cover, and roof shapes and windows are drawn for illustration, so heights and details
+          are approximate.
         </p>
         <form method="dialog">
           <button type="submit" autoFocus>

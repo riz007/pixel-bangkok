@@ -55,7 +55,15 @@ def test_manifest_describes_image_tiles_and_projection(area, bounds, render_conf
     assert manifest["tiles"]["max_level"] == levels[-1]["level"]
     assert manifest["projection"]["world_to_image"] == projection.master_matrix()
     assert manifest["projection"]["bounds"]["crs"] == "EPSG:32647"
-    assert manifest["attribution"]["text"] == area.source.attribution
+    assert manifest["version"] == 2
+    assert manifest["attributions"] == [
+        {
+            "text": area.source.attribution,
+            "url": area.source.attribution_url,
+            "licence": area.source.licence,
+            "provider": area.source.provider,
+        }
+    ]
     assert manifest["source"]["retrieved_at"] == "2026-01-01T00:00:00+00:00"
 
 
@@ -69,3 +77,28 @@ def test_master_size_matches_manifest_projection(bounds, render_config):
     native = Image.new("RGB", (projection.native_width, projection.native_height))
     master = apply_pixel_art(native, render_config)
     assert master.size == (projection.master_width, projection.master_height)
+
+
+def test_manifest_credits_raster_sources_that_were_used(render_config):
+    import dataclasses
+
+    from pixel_bangkok.config import RasterSourceConfig, parse_area_config
+
+    from .conftest import AREA
+
+    raster = RasterSourceConfig("Heights", "v1", 0.5, "CC BY 4.0", "Heights: X", "https://x", 2023)
+    area = dataclasses.replace(parse_area_config(AREA), building_heights=raster)
+    from pixel_bangkok.crs import MapBounds
+
+    projection = IsoProjection.create(MapBounds.from_area(area), render_config)
+    size = (projection.master_width, projection.master_height)
+    levels = level_dimensions(*size)
+    unused = build_manifest(area, render_config, size, levels, "abc", {})
+    used = build_manifest(area, render_config, size, levels, "abc", {}, ("building_heights",))
+    assert len(unused["attributions"]) == 1
+    assert used["attributions"][1] == {
+        "text": "Heights: X",
+        "url": "https://x",
+        "licence": "CC BY 4.0",
+        "provider": "Heights",
+    }

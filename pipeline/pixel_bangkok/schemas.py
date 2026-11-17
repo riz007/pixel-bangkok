@@ -11,7 +11,7 @@ from typing import Any, Literal, NotRequired, TypedDict
 
 HeightProvenance = Literal["source", "estimated", "manual", "unknown"]
 WidthProvenance = Literal["source", "estimated"]
-RoofShape = Literal["flat", "spire"]
+RoofShape = Literal["flat", "spire", "gabled", "chedi", "prang"]
 
 
 class BaseProperties(TypedDict):
@@ -27,10 +27,13 @@ class BuildingFeature(BaseProperties):
     category: str
     is_temple: bool
     is_tower: bool
+    tower_type: NotRequired[str | None]
     source_height: str | None
     source_levels: str | None
+    raster_height_m: NotRequired[float | None]
     render_height_m: NotRequired[float]
     height_provenance: NotRequired[HeightProvenance]
+    height_source: NotRequired[str | None]
     height_note: NotRequired[str | None]
     roof_shape: NotRequired[RoofShape]
 
@@ -52,8 +55,12 @@ class GreenSpaceFeature(BaseProperties):
     category: str
 
 
-class TreeFeature(BaseProperties):
-    pass
+class TreeFeature(TypedDict):
+    source_id: str
+    source: str
+    height_m: float
+    crown_radius_m: float
+    height_provenance: HeightProvenance
 
 
 POI_CATEGORIES = ("temple", "landmark", "pier", "historic", "market", "neighbourhood")

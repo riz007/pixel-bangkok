@@ -63,6 +63,7 @@ button {
 
 .app {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
   height: 100dvh;
 }
@@ -150,7 +151,24 @@ button {
   border-top: 2px solid var(--line);
 }
 
+.app__attributions {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.credits__sources {
+  margin: 0 0 12px;
+  padding-left: 18px;
+}
+
+.credits__licence {
+  color: var(--sand);
+  font-size: 0.8rem;
+}
+
 .text-button {
+  flex: none;
   padding: 2px 6px;
   border: 0;
   background: none;

@@ -5,9 +5,33 @@
       "source_id": "way/23482275",
       "name_en": "Wat Arun Central Prang",
       "height_m": 76,
-      "roof_shape": "spire",
+      "roof_shape": "prang",
       "note": "Manual. OSM has no height tag; 76 is the value OSM contributors recorded in the feature's 'ele' tag with the description that it follows the temple's official site. Published figures for the prang range from about 67 m to 86 m.",
       "reference_url": "https://www.openstreetmap.org/way/23482275"
+    },
+    {
+      "source_id": "way/1148151954",
+      "roof_shape": "prang",
+      "note": "Manual drawing choice: one of the four satellite prangs around the central prang (OSM tags it a temple pagoda). Height is not overridden.",
+      "reference_url": "https://www.openstreetmap.org/way/1148151954"
+    },
+    {
+      "source_id": "way/1148151955",
+      "roof_shape": "prang",
+      "note": "Manual drawing choice: one of the four satellite prangs around the central prang (OSM tags it a temple pagoda). Height is not overridden.",
+      "reference_url": "https://www.openstreetmap.org/way/1148151955"
+    },
+    {
+      "source_id": "way/1148151956",
+      "roof_shape": "prang",
+      "note": "Manual drawing choice: one of the four satellite prangs around the central prang (OSM tags it a temple pagoda). Height is not overridden.",
+      "reference_url": "https://www.openstreetmap.org/way/1148151956"
+    },
+    {
+      "source_id": "way/1148151957",
+      "roof_shape": "prang",
+      "note": "Manual drawing choice: one of the four satellite prangs around the central prang (OSM tags it a temple pagoda). Height is not overridden.",
+      "reference_url": "https://www.openstreetmap.org/way/1148151957"
     }
   ]
 }

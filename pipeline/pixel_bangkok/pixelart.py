@@ -1,6 +1,6 @@
 """Stage 5: deterministic pixel-art treatment of the procedural render.
 
-Adds fixed texture patterns to water and green areas, then upscales by an
+Adds fixed texture patterns to water, grass, bare ground and flat roofs, then upscales by an
 integer factor with nearest-neighbour sampling. Geometry is never moved: the
 master image is the native render scaled by exactly `upscale`.
 """
@@ -31,8 +31,12 @@ def apply_pixel_art(image: Image.Image, render: RenderConfig) -> Image.Image:
     ys, xs = np.mgrid[0:height, 0:width]
     ripples = (ys % 6 == 0) & ((xs + (ys // 6) * 7) % 13 < 4)
     tufts = (xs * 7 + ys * 13) % 11 == 0
+    speckles = ((xs * 3 + ys * 7) % 11 == 0) & (ys % 2 == 0)
+    roof_grain = ((xs + ys * 2) % 6 == 0) & (ys % 3 == 0)
     _replace(pixels, "water", "water_light", ripples, render.palette)
     _replace(pixels, "green", "green_dark", tufts, render.palette)
+    _replace(pixels, "terrain", "terrain_dither", speckles, render.palette)
+    _replace(pixels, "building_roof", "roof_dither", roof_grain, render.palette)
     styled = Image.fromarray(pixels, "RGB")
     return styled.resize(
         (width * render.upscale, height * render.upscale), Image.Resampling.NEAREST

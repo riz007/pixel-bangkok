@@ -1,7 +1,10 @@
-"""Stage 1: download raw OpenStreetMap data for an area through the Overpass API.
+"""Stage 1: download raw source data for an area.
 
-Output: data/raw/<area>/osm.json (Overpass JSON, WGS84 lon/lat degrees) and
-data/raw/<area>/extract-metadata.json recording provenance.
+Outputs in data/raw/<area>/:
+- osm.json: Overpass JSON, WGS84 lon/lat degrees.
+- building_heights.tif, tree_canopy.tif: raster windows on the area grid in the
+  area CRS (see rasters.py), when the area config lists those sources.
+- extract-metadata.json: provenance for everything above.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
+from . import rasters
 from .config import AreaConfig
 from .crs import MapBounds
 
@@ -67,15 +71,9 @@ def fetch(area: AreaConfig, query: str, timeout_s: float = 120.0) -> tuple[dict[
     raise RuntimeError("all Overpass endpoints failed:\n" + "\n".join(errors))
 
 
-def run(area: AreaConfig, raw_dir: Path, force: bool = False) -> Path:
-    output = raw_dir / "osm.json"
-    if output.exists() and not force:
-        log.info("raw extract already exists, skipping download: %s (use --force)", output)
-        return output
-    bounds = MapBounds.from_area(area)
+def _fetch_osm(area: AreaConfig, bounds: MapBounds, output: Path) -> dict[str, object]:
     query = build_query(bounds)
     payload, endpoint = fetch(area, query)
-    raw_dir.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     south, west, north, east = bounds.geographic_bbox(buffer_m=QUERY_BUFFER_M)
     metadata = {
@@ -91,8 +89,37 @@ def run(area: AreaConfig, raw_dir: Path, force: bool = False) -> Path:
         "query_bbox_wgs84": {"south": south, "west": west, "north": north, "east": east},
         "element_count": len(payload["elements"]),
     }
-    (raw_dir / "extract-metadata.json").write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
     log.info("wrote %d OSM elements to %s", metadata["element_count"], output)
-    return output
+    return metadata
+
+
+def run(area: AreaConfig, raw_dir: Path, force: bool = False) -> Path:
+    bounds = MapBounds.from_area(area)
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = raw_dir / "extract-metadata.json"
+    metadata = (
+        json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
+    )
+    if "osm" not in metadata and "provider" in metadata:
+        metadata = {"osm": metadata}
+
+    osm_path = raw_dir / "osm.json"
+    if osm_path.exists() and not force:
+        log.info("raw OSM extract exists, skipping download: %s (use --force)", osm_path)
+    else:
+        metadata["osm"] = _fetch_osm(area, bounds, osm_path)
+
+    heights_path = raw_dir / "building_heights.tif"
+    if area.building_heights is not None and (force or not heights_path.exists()):
+        metadata["building_heights"] = rasters.fetch_building_heights(
+            bounds,
+            area.building_heights,
+            heights_path,
+            raw_dir.parent / "_cache" / "open-buildings",
+        )
+    canopy_path = raw_dir / "tree_canopy.tif"
+    if area.tree_canopy is not None and (force or not canopy_path.exists()):
+        metadata["tree_canopy"] = rasters.fetch_tree_canopy(bounds, area.tree_canopy, canopy_path)
+
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    return metadata_path

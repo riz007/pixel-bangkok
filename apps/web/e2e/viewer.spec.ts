@@ -2,7 +2,15 @@ import { expect, type Page, test } from "@playwright/test";
 
 const TILE_URL = /\/maps\/wat-arun\/tiles\/\d+\/\d+_\d+\.webp$/;
 const PRANG = '[data-poi-id="wat-arun-central-prang"]';
-const TEMPLE_COLOURS = ["243,234,214", "205,191,159", "42,36,48"];
+const TEMPLE_COLOURS = [
+  "243,234,214",
+  "205,191,159",
+  "150,145,132",
+  "127,118,98",
+  "232,184,58",
+  "143,114,35",
+  "42,36,48",
+];
 
 async function openMap(page: Page) {
   await page.goto("/");
@@ -129,6 +137,10 @@ test("attribution is visible and credits open in a dialog", async ({ page }) => 
   const dialog = page.getByRole("dialog", { name: "Credits & data" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText(/ODbL/)).toBeVisible();
+  const manifest = await (await page.request.get("/maps/wat-arun/manifest.json")).json();
+  for (const attribution of manifest.attributions) {
+    await expect(dialog.getByRole("link", { name: attribution.text })).toBeVisible();
+  }
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });
@@ -150,4 +162,10 @@ test("shows an error when tiles fail to load", async ({ page }) => {
   await page.route(TILE_URL, (route) => route.fulfill({ status: 500, body: "" }));
   await page.goto("/");
   await expect(page.getByText("The map image could not be loaded")).toBeVisible();
+});
+
+test("page never scrolls horizontally", async ({ page }) => {
+  await openMap(page);
+  const contentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(contentWidth).toBeLessThanOrEqual(page.viewportSize()!.width);
 });
