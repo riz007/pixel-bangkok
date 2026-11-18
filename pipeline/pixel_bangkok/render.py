@@ -11,12 +11,16 @@ behind it stay hidden even though vegetation composites above buildings.
 
 from __future__ import annotations
 
+import gc
 import logging
 import math
+import random
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+import shapely
 from PIL import Image, ImageDraw
 from shapely.affinity import affine_transform, scale, translate
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon, box
@@ -32,7 +36,27 @@ from .projection import IsoProjection
 
 log = logging.getLogger(__name__)
 
-LAYER_ORDER = ("terrain", "water", "green", "roads", "shadows", "buildings", "vegetation")
+LAYER_ORDER = (
+    "terrain",
+    "ground",
+    "water",
+    "green",
+    "roads",
+    "rail",
+    "shadows",
+    "buildings",
+    "vegetation",
+)
+GROUND_ORDER = (
+    "residential",
+    "commercial",
+    "institutional",
+    "military",
+    "religious",
+    "palace",
+    "parking",
+    "paved",
+)
 PATH_CATEGORIES = {"footway", "path", "steps", "pedestrian", "cycleway"}
 MAJOR_CATEGORIES = {"motorway", "trunk", "primary", "secondary", "tertiary"}
 WALL_LIGHT_THRESHOLD = 0.1
@@ -50,8 +74,18 @@ PRANG_TOWER = (0.24, 0.86, 9)
 CHEDI_PLINTHS = ((1.0, 0.0, 0.1), (0.9, 0.1, 0.16))
 CHEDI_BELL = (0.16, 0.5, 6)
 CHEDI_HARMIKA = (0.3, 0.5, 0.56)
+MATERIAL_TOWER_HEIGHT_M = 25.0
+MATERIAL_LOWRISE_HEIGHT_M = 7.0
+MATERIAL_LOWRISE_AREA_M2 = 400.0
+CORRUGATION_SPACING_M = 0.7
+TRADITIONAL_GROUNDS = {"religious", "palace"}
 TREE_FOOTPRINT_FRACTION = 0.5
 TRANSPARENT = (0, 0, 0, 0)
+PARAPET_INSET_M = 0.3
+PARAPET_HEIGHT_M = 0.4
+DECK_CAP_SEGMENTS = 3
+FRONT_CELL_PX = 32
+TRAIN_CLEARANCE_PX = 16
 
 Color = tuple[int, int, int, int]
 XY = tuple[float, float]
@@ -66,6 +100,11 @@ def parse_color(value: str) -> Color:
     if len(channels) == 3:
         channels.append(255)
     return channels[0], channels[1], channels[2], channels[3]
+
+
+def _snap(points: Any) -> list[tuple[int, int]]:
+    """Floor to whole pixels so drawing is identical under whole-pixel shifts (blocks)."""
+    return [(math.floor(x), math.floor(y)) for x, y in points]
 
 
 def _polygons(geometry: BaseGeometry) -> list[Polygon]:
@@ -94,13 +133,67 @@ class Primitive:
     z: float = 0.0
 
 
+@dataclass(frozen=True)
+class Deck:
+    """A short piece of an elevated road or rail way, sloping from z0 to z1."""
+
+    line: LineString
+    z0: float
+    z1: float
+    width: float
+    kind: Literal["road", "rail"]
+    start: float
+    properties: dict
+    key: str
+    first: bool = False
+    last: bool = False
+
+    @property
+    def footprint(self) -> Polygon:
+        """Round joints between pieces so bends stay closed; square ends where the way ends."""
+        radius = self.width / 2
+        parts = [self.line.buffer(radius, cap_style="flat")]
+        for end, flat in ((self.line.coords[0], self.first), (self.line.coords[-1], self.last)):
+            if not flat:
+                parts.append(Point(end).buffer(radius, quad_segs=DECK_CAP_SEGMENTS))
+        merged = unary_union(parts)
+        return merged if isinstance(merged, Polygon) else merged.convex_hull
+
+    def z_at(self, x: float, y: float) -> float:
+        length = self.line.length
+        fraction = self.line.project(Point(x, y)) / length if length else 0.0
+        return self.z0 + (self.z1 - self.z0) * fraction
+
+
+def deck_height(properties: dict, distance: float, length: float, ramp_grade: float) -> float:
+    """Deck top height `distance` metres along an elevated way, sloping down on ramp ends."""
+    elevation = properties["elevation_m"]
+    ramp = elevation / ramp_grade
+    factor = 1.0
+    if properties.get("ramp_start"):
+        factor = min(factor, distance / ramp)
+    if properties.get("ramp_end"):
+        factor = min(factor, (length - distance) / ramp)
+    return elevation * max(factor, 0.0)
+
+
+def is_elevated(properties: dict) -> bool:
+    return bool(properties.get("elevated")) or properties.get("level") == "elevated"
+
+
 class SceneRenderer:
-    def __init__(self, bounds: MapBounds, render: RenderConfig) -> None:
+    def __init__(
+        self, bounds: MapBounds, render: RenderConfig, projection: IsoProjection | None = None
+    ) -> None:
         self.bounds = bounds
         self.config = render
-        self.projection = IsoProjection.create(bounds, render)
+        self.projection = projection or IsoProjection.create(bounds, render)
         self.size = (self.projection.native_width, self.projection.native_height)
         self.palette = {name: parse_color(value) for name, value in render.palette.items()}
+        for material, colours in render.materials.items():
+            for part, value in colours.items():
+                if part != "roof_texture":
+                    self.palette[f"{material}_{part}"] = parse_color(value)
         camera = math.radians(render.camera_azimuth_deg)
         elevation = math.radians(render.camera_elevation_deg)
         self.toward_camera = (-math.sin(camera), -math.cos(camera))
@@ -118,6 +211,12 @@ class SceneRenderer:
         length = math.hypot(lit[0] - origin[0], lit[1] - origin[1]) or 1.0
         self.light_on_screen = ((lit[0] - origin[0]) / length, (lit[1] - origin[1]) / length)
         self._shades: dict[str, Color] = {}
+        self.precincts: BaseGeometry = Polygon()
+
+    def set_precincts(self, ground: list[tuple[BaseGeometry, dict]]) -> None:
+        """Temple and palace grounds; buildings inside are drawn in traditional style."""
+        self.precincts = unary_union([g for g, p in ground if p["category"] in TRADITIONAL_GROUNDS])
+        shapely.prepare(self.precincts)
 
     def color(self, name: str) -> Color:
         """Palette colour; `shade:<name>` is a darker tone of <name> for pixel-art edges."""
@@ -139,25 +238,47 @@ class SceneRenderer:
     def _ring(self, coords: Any, z: float = 0.0) -> list[XY]:
         return [self.projection.world_to_native(x, y, z) for x, y in coords]
 
-    def _mask(self, geometry: BaseGeometry, z: float = 0.0) -> Image.Image:
-        mask = Image.new("L", self.size, 0)
-        draw = ImageDraw.Draw(mask)
+    def _mask(
+        self, geometry: BaseGeometry, z: float = 0.0
+    ) -> tuple[Image.Image, tuple[int, int]] | None:
+        """Polygon mask cropped to its projected bounding box, with the box's top-left corner."""
+        rings = []
         for polygon in _polygons(geometry):
-            draw.polygon(self._ring(polygon.exterior.coords, z), fill=255)
-            for interior in polygon.interiors:
-                draw.polygon(self._ring(interior.coords, z), fill=0)
-        return mask
+            rings.append((self._ring(polygon.exterior.coords, z), 255))
+            rings.extend((self._ring(interior.coords, z), 0) for interior in polygon.interiors)
+        if not rings:
+            return None
+        xs = [x for ring, _ in rings for x, _ in ring]
+        ys = [y for ring, _ in rings for _, y in ring]
+        left = max(math.floor(min(xs)) - 1, 0)
+        top = max(math.floor(min(ys)) - 1, 0)
+        right = min(math.ceil(max(xs)) + 2, self.size[0])
+        bottom = min(math.ceil(max(ys)) + 2, self.size[1])
+        if right <= left or bottom <= top:
+            return None
+        mask = Image.new("L", (right - left, bottom - top), 0)
+        draw = ImageDraw.Draw(mask)
+        for ring, value in rings:
+            draw.polygon([(x - left, y - top) for x, y in _snap(ring)], fill=value)
+        return mask, (left, top)
+
+    def _paste(self, layer: Image.Image, geometry: BaseGeometry, color: Color, z: float = 0.0):
+        cropped = self._mask(geometry, z)
+        if cropped is None:
+            return
+        mask, origin = cropped
+        layer.paste(Image.new("RGBA", mask.size, color), origin, mask)
 
     def _fill(self, layer: Image.Image, geometry: BaseGeometry, color: Color) -> None:
         if geometry.is_empty:
             return
-        layer.paste(Image.new("RGBA", self.size, color), (0, 0), self._mask(geometry))
+        self._paste(layer, geometry, color)
 
     def _outline(self, layer: Image.Image, geometry: BaseGeometry, color: Color) -> None:
         draw = ImageDraw.Draw(layer)
         for polygon in _polygons(geometry):
             for ring in (polygon.exterior, *polygon.interiors):
-                draw.line(self._ring(ring.coords), fill=color, width=1)
+                draw.line(_snap(self._ring(ring.coords)), fill=color, width=1)
 
     def _clip(self, geometry: BaseGeometry) -> BaseGeometry:
         return geometry.intersection(box(0, 0, self.bounds.width_m, self.bounds.height_m))
@@ -173,21 +294,17 @@ class SceneRenderer:
         for primitive in primitives:
             if primitive.kind == "polygon":
                 draw.polygon(
-                    list(primitive.points),
+                    _snap(primitive.points),
                     fill=color(primitive.fill),
                     outline=None if erase else color(primitive.outline),
                 )
             elif primitive.kind == "line":
                 if not erase:
-                    draw.line(list(primitive.points), fill=color(primitive.outline), width=1)
+                    draw.line(_snap(primitive.points), fill=color(primitive.outline), width=1)
             elif primitive.geometry is not None and not primitive.geometry.is_empty:
                 fill = color(primitive.fill)
                 if fill is not None:
-                    layer.paste(
-                        Image.new("RGBA", self.size, fill),
-                        (0, 0),
-                        self._mask(primitive.geometry, primitive.z),
-                    )
+                    self._paste(layer, primitive.geometry, fill, primitive.z)
                     draw = ImageDraw.Draw(layer)
 
     def terrain(self) -> Image.Image:
@@ -214,7 +331,16 @@ class SceneRenderer:
         foam = merged.buffer(-FOAM_INSET_M).boundary.difference(area_edge)
         draw = ImageDraw.Draw(layer)
         for line in sorted(_lines(foam), key=lambda item: item.wkb):
-            draw.line(self._ring(line.coords), fill=self.palette["foam"], width=1)
+            draw.line(_snap(self._ring(line.coords)), fill=self.palette["foam"], width=1)
+        return layer
+
+    def ground(self, features: list[tuple[BaseGeometry, dict]]) -> Image.Image:
+        layer = self._blank()
+        for category in GROUND_ORDER:
+            shapes = [g for g, p in features if p["category"] == category]
+            if shapes:
+                merged = self._clip(unary_union(shapes))
+                self._fill(layer, merged, self.palette[f"ground_{category}"])
         return layer
 
     def green(self, features: list[tuple[BaseGeometry, dict]]) -> Image.Image:
@@ -226,8 +352,11 @@ class SceneRenderer:
         layer = self._blank()
         groups: dict[str, list[BaseGeometry]] = {"pier": [], "path": [], "road": [], "major": []}
         centre_lines: list[LineString] = []
+        sidewalks: list[BaseGeometry] = []
         style = self.config.roads
         for geometry, properties in features:
+            if is_elevated(properties):
+                continue
             category = properties["category"]
             is_line = geometry.geom_type in {"LineString", "MultiLineString"}
             if is_line:
@@ -237,6 +366,17 @@ class SceneRenderer:
                     and properties["width_m"] >= style.marking_min_width_m
                 ):
                     centre_lines.extend(_lines(geometry))
+                if (
+                    category not in PATH_CATEGORIES
+                    and category != "pier"
+                    and not properties.get("bridge")
+                    and self.config.sidewalk_m > 0
+                ):
+                    sidewalks.append(
+                        geometry.buffer(
+                            properties["width_m"] / 2 + self.config.sidewalk_m, cap_style="flat"
+                        )
+                    )
                 geometry = geometry.buffer(properties["width_m"] / 2, cap_style="round")
             if category == "pier":
                 groups["pier"].append(geometry)
@@ -248,6 +388,8 @@ class SceneRenderer:
                 groups["road"].append(geometry)
         colors = {"pier": "pier", "path": "path", "road": "road", "major": "road_major"}
         carriageway = self._clip(unary_union(groups["road"] + groups["major"]))
+        if sidewalks:
+            self._fill(layer, self._clip(unary_union(sidewalks)), self.palette["sidewalk"])
         for group in ("pier", "path"):
             self._fill(layer, self._clip(unary_union(groups[group])), self.palette[colors[group]])
         self._fill(layer, carriageway, self.palette["road"])
@@ -260,9 +402,260 @@ class SceneRenderer:
             while start < line.length:
                 dash = substring(line, start, min(start + style.dash_m, line.length))
                 if dash.length > 0:
-                    draw.line(self._ring(dash.coords), fill=self.palette["road_marking"], width=1)
+                    draw.line(
+                        _snap(self._ring(dash.coords)), fill=self.palette["road_marking"], width=1
+                    )
                 start += period
         return layer
+
+    def _dashes(
+        self, draw: ImageDraw.ImageDraw, line: LineString, dash: float, gap: float, fill: Color
+    ) -> None:
+        start = gap / 2
+        while start < line.length:
+            piece = substring(line, start, min(start + dash, line.length))
+            if piece.length > 0:
+                draw.line(_snap(self._ring(piece.coords)), fill=fill, width=1)
+            start += dash + gap
+
+    def rail(self, features: list[tuple[BaseGeometry, dict]]) -> Image.Image:
+        """Rail at grade (ballast, sleepers, rails) and a dashed trace over underground lines."""
+        layer = self._blank()
+        transit = self.config.transit
+        ground = [(g, p) for g, p in features if p.get("level") == "ground"]
+        beds = []
+        for geometry, properties in ground:
+            span = (properties["tracks"] - 1) * transit.track_spacing_m + transit.ballast_width_m
+            beds.append(geometry.buffer(span / 2, cap_style="flat"))
+        if beds:
+            self._fill(layer, self._clip(unary_union(beds)), self.palette["rail_bed"])
+        draw = ImageDraw.Draw(layer)
+        for geometry, properties in sorted(ground, key=lambda item: item[1]["source_id"]):
+            tracks = properties["tracks"]
+            span = (tracks - 1) * transit.track_spacing_m + transit.ballast_width_m
+            for line in _lines(geometry):
+                step = transit.sleeper_spacing_m
+                distance = step / 2
+                while distance < line.length:
+                    a = line.interpolate(max(distance - 0.01, 0))
+                    b = line.interpolate(min(distance + 0.01, line.length))
+                    dx, dy = b.x - a.x, b.y - a.y
+                    norm = math.hypot(dx, dy) or 1.0
+                    nx, ny = -dy / norm * span * 0.4, dx / norm * span * 0.4
+                    centre = line.interpolate(distance)
+                    draw.line(
+                        _snap(
+                            self._ring(
+                                [(centre.x - nx, centre.y - ny), (centre.x + nx, centre.y + ny)]
+                            )
+                        ),
+                        fill=self.palette["rail_sleeper"],
+                        width=1,
+                    )
+                    distance += step
+                for offset in self._rail_offsets(tracks, transit.track_spacing_m):
+                    for rail_line in _lines(line.offset_curve(offset)):
+                        draw.line(
+                            _snap(self._ring(rail_line.coords)),
+                            fill=self.palette["rail_steel"],
+                            width=1,
+                        )
+        for geometry, _ in sorted(
+            (item for item in features if item[1].get("level") == "underground"),
+            key=lambda item: item[1]["source_id"],
+        ):
+            for line in _lines(geometry):
+                self._dashes(
+                    draw,
+                    line,
+                    transit.subway_dash_m,
+                    transit.subway_gap_m,
+                    self.palette["subway_trace"],
+                )
+        return layer
+
+    def _rail_offsets(self, tracks: int, spacing: float) -> list[float]:
+        half = self.config.transit.rail_gauge_m / 2
+        return [
+            (index - (tracks - 1) / 2) * spacing + side
+            for index in range(tracks)
+            for side in (-half, half)
+        ]
+
+    def decks(
+        self,
+        roads: list[tuple[BaseGeometry, dict]],
+        rail: list[tuple[BaseGeometry, dict]],
+    ) -> list[Deck]:
+        transit = self.config.transit
+        pieces: list[Deck] = []
+        for kind, features in (("road", roads), ("rail", rail)):
+            for geometry, properties in features:
+                if not is_elevated(properties):
+                    continue
+                width = (
+                    properties["width_m"]
+                    if kind == "road"
+                    else properties["tracks"] * properties["track_width_m"]
+                )
+                prefix = f"{properties['source_id']}#{properties.get('part', 0)}"
+                for line in _lines(geometry):
+                    length = line.length
+                    if length <= 0:
+                        continue
+                    count = max(1, math.ceil(length / transit.segment_m))
+                    for index in range(count):
+                        start, end = length * index / count, length * (index + 1) / count
+                        if not self._piece_on_screen(line, start, end, width, properties):
+                            continue
+                        pieces.append(
+                            Deck(
+                                line=substring(line, start, end),
+                                z0=self._deck_height(properties, start, length),
+                                z1=self._deck_height(properties, end, length),
+                                width=width,
+                                kind=kind,
+                                start=start,
+                                properties=properties,
+                                key=f"{prefix}:{index}",
+                                first=index == 0,
+                                last=index == count - 1,
+                            )
+                        )
+        return pieces
+
+    def _piece_on_screen(
+        self, line: LineString, start: float, end: float, width: float, properties: dict
+    ) -> bool:
+        """Whether a deck piece, its pillars or its shadow can reach this image (or block)."""
+        elevation = properties["elevation_m"]
+        reach = width / 2 + elevation * self.config.shadow_length_per_metre + 2.0
+        xs, ys = [], []
+        for distance in (start, end):
+            point = line.interpolate(distance)
+            for z in (0.0, elevation):
+                x, y = self.projection.world_to_native(point.x, point.y, z)
+                xs.append(x)
+                ys.append(y)
+        margin = reach * self.config.pixels_per_metre * 2.5 + FRONT_CELL_PX
+        return (
+            max(xs) >= -margin
+            and min(xs) <= self.size[0] + margin
+            and max(ys) >= -margin
+            and min(ys) <= self.size[1] + margin
+        )
+
+    def _deck_height(self, properties: dict, distance: float, length: float) -> float:
+        return deck_height(properties, distance, length, self.config.transit.ramp_grade)
+
+    def _pillar(self, centre: Point, direction: XY, top: float) -> list[Primitive]:
+        half = self.config.transit.pillar_size_m / 2
+        ux, uy = direction
+        nx, ny = -uy, ux
+        corners = [
+            (centre.x + sx * ux * half + sy * nx * half, centre.y + sx * uy * half + sy * ny * half)
+            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+        ]
+        pillar = orient(Polygon(corners))
+        project = self.projection.world_to_native
+        primitives = []
+        for a, b in self._edges(pillar):
+            if not self._faces_camera(a, b):
+                continue
+            fill = self._wall_color(a, b, "viaduct")
+            quad = (project(*a), project(*b), project(*b, top), project(*a, top))
+            primitives.append(Primitive("polygon", fill, f"shade:{fill}", points=quad))
+        return primitives
+
+    def deck(self, deck: Deck) -> list[Primitive]:
+        transit = self.config.transit
+        project = self.projection.world_to_native
+        line = deck.line
+        primitives: list[Primitive] = []
+        spacing = transit.pillar_spacing_m
+        distance = math.ceil((deck.start - spacing / 2) / spacing) * spacing + spacing / 2
+        while distance < deck.start + line.length:
+            local = distance - deck.start
+            centre = line.interpolate(local)
+            ahead = line.interpolate(min(local + 0.5, line.length))
+            behind = line.interpolate(max(local - 0.5, 0))
+            dx, dy = ahead.x - behind.x, ahead.y - behind.y
+            norm = math.hypot(dx, dy) or 1.0
+            top = deck.z_at(centre.x, centre.y) - transit.deck_thickness_m
+            if top > transit.deck_thickness_m:
+                primitives += self._pillar(centre, (dx / norm, dy / norm), top)
+            distance += spacing
+        footprint = orient(deck.footprint)
+        coords = list(footprint.exterior.coords)
+        thickness = transit.deck_thickness_m
+        for a, b in self._edges(footprint):
+            if not self._faces_camera(a, b):
+                continue
+            za, zb = deck.z_at(*a), deck.z_at(*b)
+            bottom_a, bottom_b = max(za - thickness, 0.0), max(zb - thickness, 0.0)
+            fill = self._wall_color(a, b, "viaduct")
+            primitives.append(
+                Primitive(
+                    "polygon",
+                    fill,
+                    points=(
+                        project(*a, bottom_a),
+                        project(*b, bottom_b),
+                        project(*b, zb),
+                        project(*a, za),
+                    ),
+                )
+            )
+            primitives.append(
+                Primitive(
+                    "line",
+                    None,
+                    "shade:viaduct_wall_dark",
+                    points=(project(*a, bottom_a), project(*b, bottom_b)),
+                )
+            )
+        surface = "road_major" if deck.kind == "road" else "viaduct_roof"
+        primitives.append(
+            Primitive(
+                "polygon",
+                surface,
+                points=tuple(project(x, y, deck.z_at(x, y)) for x, y in coords),
+            )
+        )
+
+        def lifted(path: LineString, lift: float) -> tuple[XY, ...]:
+            return tuple(project(x, y, deck.z_at(x, y) + lift) for x, y in path.coords)
+
+        if deck.kind == "rail":
+            for offset in self._rail_offsets(
+                deck.properties["tracks"], deck.properties["track_width_m"]
+            ):
+                for rail_line in _lines(line.offset_curve(offset)):
+                    primitives.append(
+                        Primitive("line", None, "rail_steel", points=lifted(rail_line, 0.1))
+                    )
+        elif deck.width >= self.config.roads.marking_min_width_m:
+            style = self.config.roads
+            period = style.dash_m + style.gap_m
+            start = math.ceil((deck.start - style.gap_m / 2) / period) * period + style.gap_m / 2
+            while start < deck.start + line.length:
+                a = max(start - deck.start, 0.0)
+                b = min(start - deck.start + style.dash_m, line.length)
+                if b > a:
+                    primitives.append(
+                        Primitive(
+                            "line", None, "road_marking", points=lifted(substring(line, a, b), 0.0)
+                        )
+                    )
+                start += period
+        for side in (1, -1):
+            for edge in _lines(line.offset_curve(side * (deck.width / 2 - PARAPET_INSET_M))):
+                primitives.append(
+                    Primitive(
+                        "line", None, "viaduct_parapet", points=lifted(edge, PARAPET_HEIGHT_M)
+                    )
+                )
+        return primitives
 
     def _tree_crown_centre(self, properties: dict) -> float:
         radius = properties["crown_radius_m"]
@@ -272,6 +665,7 @@ class SceneRenderer:
         self,
         buildings: list[tuple[BaseGeometry, dict]],
         trees: list[tuple[BaseGeometry, dict]],
+        decks: list[Deck] = (),  # type: ignore[assignment]
     ) -> Image.Image:
         swept: list[BaseGeometry] = []
         per_metre = self.config.shadow_length_per_metre
@@ -292,6 +686,9 @@ class SceneRenderer:
             length = self._tree_crown_centre(properties) * per_metre
             centre = Point(point.x + away[0] * length, point.y + away[1] * length)
             swept.append(centre.buffer(properties["crown_radius_m"], quad_segs=8))
+        for deck in decks:
+            length = (deck.z0 + deck.z1) / 2 * per_metre
+            swept.append(translate(deck.footprint, away[0] * length, away[1] * length))
         layer = self._blank()
         self._fill(layer, self._clip(unary_union(swept)), self.palette["shadow"])
         contact = self._blank()
@@ -299,12 +696,25 @@ class SceneRenderer:
         self._fill(contact, self._clip(unary_union(footprints)), self.palette["contact_shadow"])
         return Image.alpha_composite(layer, contact)
 
-    def _wall_color(self, a: XY, b: XY, temple: bool) -> str:
+    def _wall_color(self, a: XY, b: XY, skin: str) -> str:
         nx, ny = b[1] - a[1], a[0] - b[0]
         length = math.hypot(nx, ny) or 1.0
         lit = (nx * self.toward_light[0] + ny * self.toward_light[1]) / length
         tone = "light" if lit > WALL_LIGHT_THRESHOLD else "dark"
-        return f"{'temple' if temple else 'building'}_wall_{tone}"
+        return f"{skin}_wall_{tone}"
+
+    def material(self, polygon: Polygon, properties: dict) -> str:
+        """Deterministic stylised material for a non-temple building (not a source fact)."""
+        groups = self.config.material_groups
+        height = properties["render_height_m"]
+        if height >= MATERIAL_TOWER_HEIGHT_M:
+            pool = groups["tower"]
+        elif height <= MATERIAL_LOWRISE_HEIGHT_M and polygon.area <= MATERIAL_LOWRISE_AREA_M2:
+            pool = groups["lowrise"]
+        else:
+            pool = groups["general"]
+        key = zlib.crc32(properties["source_id"].encode()) ^ self.config.seed
+        return pool[key % len(pool)]
 
     def _edges(self, polygon: Polygon) -> list[tuple[XY, XY]]:
         edges = []
@@ -322,7 +732,7 @@ class SceneRenderer:
         nx, ny = b[1] - a[1], a[0] - b[0]
         return nx * self.toward_camera[0] + ny * self.toward_camera[1] > 0
 
-    def _windows(self, a: XY, b: XY, wall_height: float, temple: bool) -> list[Primitive]:
+    def _windows(self, a: XY, b: XY, wall_height: float, skin: str) -> list[Primitive]:
         facade = self.config.facade
         floor = self.config.heights.floor_height_m
         length = math.hypot(b[0] - a[0], b[1] - a[1])
@@ -333,7 +743,7 @@ class SceneRenderer:
         offset = (length - count * facade.window_spacing_m) / 2
         offset += (facade.window_spacing_m - facade.window_width_m) / 2
         project = self.projection.world_to_native
-        fill = "window_temple" if temple else "window"
+        fill = f"{skin}_window" if f"{skin}_window" in self.palette else "window"
         primitives = []
         storey = 0
         while True:
@@ -366,16 +776,16 @@ class SceneRenderer:
             storey += 1
         return primitives
 
-    def _walls(self, polygon: Polygon, wall_height: float, temple: bool) -> list[Primitive]:
+    def _walls(self, polygon: Polygon, wall_height: float, skin: str) -> list[Primitive]:
         project = self.projection.world_to_native
         primitives = []
         for a, b in self._edges(polygon):
             if not self._faces_camera(a, b):
                 continue
             quad = (project(*a), project(*b), project(*b, wall_height), project(*a, wall_height))
-            fill = self._wall_color(a, b, temple)
+            fill = self._wall_color(a, b, skin)
             primitives.append(Primitive("polygon", fill, f"shade:{fill}", points=quad))
-            primitives.extend(self._windows(a, b, wall_height, temple))
+            primitives.extend(self._windows(a, b, wall_height, skin))
         return primitives
 
     def _roof_outline(self, polygon: Polygon, height: float) -> list[Primitive]:
@@ -384,24 +794,90 @@ class SceneRenderer:
             for ring in (polygon.exterior, *polygon.interiors)
         ]
 
-    def prism(self, polygon: Polygon, height: float, temple: bool) -> list[Primitive]:
-        primitives = self._walls(polygon, height, temple)
-        if temple:
+    def prism(
+        self, polygon: Polygon, height: float, skin: str, source_id: str = ""
+    ) -> list[Primitive]:
+        primitives = self._walls(polygon, height, skin)
+        if skin == "temple":
             primitives.append(Primitive("area", "temple_roof", geometry=polygon, z=height))
-        else:
-            primitives.append(Primitive("area", "building_roof_edge", geometry=polygon, z=height))
-            inner = polygon.buffer(-self.config.facade.parapet_m, join_style="mitre")
-            if not inner.is_empty:
-                primitives.append(Primitive("area", "building_roof", geometry=inner, z=height))
+            return primitives + self._roof_outline(polygon, height)
+        primitives.append(Primitive("area", f"{skin}_roof_edge", geometry=polygon, z=height))
+        inner = polygon.buffer(-self.config.facade.parapet_m, join_style="mitre")
+        if not inner.is_empty:
+            primitives.append(Primitive("area", f"{skin}_roof", geometry=inner, z=height))
+            if self.config.materials.get(skin, {}).get("roof_texture") == "metal":
+                primitives += self._corrugation(polygon, inner, height, f"shade:{skin}_roof")
+            else:
+                primitives += self._rooftop_items(inner, height, source_id)
         return primitives + self._roof_outline(polygon, height)
 
-    def spire(self, polygon: Polygon, height: float, temple: bool) -> list[Primitive]:
+    def _corrugation(
+        self, footprint: Polygon, roof: BaseGeometry, height: float, color: str
+    ) -> list[Primitive]:
+        rectangle = footprint.minimum_rotated_rectangle
+        if not isinstance(rectangle, Polygon):
+            return []
+        corners = list(rectangle.exterior.coords)[:4]
+        long_side = max(range(4), key=lambda i: math.dist(corners[i], corners[(i + 1) % 4]))
+        a, b = corners[long_side], corners[(long_side + 1) % 4]
+        length = math.dist(a, b) or 1.0
+        ux, uy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+        nx, ny = -uy, ux
+        centre = footprint.centroid
+        reach = max(math.dist(c, (centre.x, centre.y)) for c in corners)
+        primitives = []
+        steps = int(2 * reach / CORRUGATION_SPACING_M)
+        for step in range(steps + 1):
+            offset = -reach + step * CORRUGATION_SPACING_M
+            ox, oy = centre.x + nx * offset, centre.y + ny * offset
+            line = LineString(
+                [(ox - ux * reach, oy - uy * reach), (ox + ux * reach, oy + uy * reach)]
+            ).intersection(roof)
+            for part in _lines(line):
+                primitives.append(
+                    Primitive("line", None, color, points=tuple(self._ring(part.coords, height)))
+                )
+        return primitives
+
+    def _rooftop_items(self, roof: BaseGeometry, height: float, source_id: str) -> list[Primitive]:
+        """Decorative water tanks and air-conditioning units; not source data."""
+        settings = self.config.rooftop
+        if height < settings.min_height_m or roof.area < settings.min_area_m2:
+            return []
+        rng = random.Random(zlib.crc32(source_id.encode()) ^ self.config.seed)
+        minx, miny, maxx, maxy = roof.bounds
+        items: list[tuple[Polygon, float, str]] = []
+        attempts = 0
+        while len(items) < settings.max_items and attempts < 20:
+            attempts += 1
+            tank = not items and rng.random() < 0.8
+            size = settings.tank_size_m if tank else settings.unit_size_m
+            x = rng.uniform(minx, maxx - size)
+            y = rng.uniform(miny, maxy - size)
+            footprint = box(x, y, x + size, y + size)
+            if not roof.contains(footprint) or any(footprint.intersects(i) for i, _, _ in items):
+                continue
+            items.append((footprint, size if tank else size * 0.7, "tank" if tank else "unit"))
+        items.sort(key=lambda item: -self.projection.depth(item[0].centroid.x, item[0].centroid.y))
+        primitives = []
+        for footprint, item_height, kind in items:
+            primitives += self.frustum(
+                orient(footprint),
+                height,
+                orient(footprint),
+                height + item_height,
+                f"rooftop_{kind}_roof",
+                skin=f"rooftop_{kind}",
+            )
+        return primitives
+
+    def spire(self, polygon: Polygon, height: float, skin: str) -> list[Primitive]:
         project = self.projection.world_to_native
         centroid = polygon.centroid
         apex = project(centroid.x, centroid.y, height)
         primitives = []
         for a, b in self._edges(Polygon(polygon.exterior)):
-            fill = self._wall_color(a, b, temple)
+            fill = self._wall_color(a, b, skin)
             primitives.append(
                 Primitive("polygon", fill, f"shade:{fill}", points=(project(*a), project(*b), apex))
             )
@@ -415,6 +891,7 @@ class SceneRenderer:
         z1: float,
         cap: str | None,
         band: str | None = None,
+        skin: str = "temple",
     ) -> list[Primitive]:
         """Side faces between two similar polygons, then the top cap; back to front."""
         project = self.projection.world_to_native
@@ -430,7 +907,7 @@ class SceneRenderer:
             faces.append((-depth, a, b, c, d))
         primitives = []
         for _, a, b, c, d in sorted(faces):
-            fill = self._wall_color(a, b, temple=True)
+            fill = self._wall_color(a, b, skin)
             primitives.append(
                 Primitive(
                     "polygon",
@@ -534,7 +1011,7 @@ class SceneRenderer:
         lit = normal[0] * self.toward_light[0] + normal[1] * self.toward_light[1]
         return facing, lit
 
-    def gabled(self, polygon: Polygon, height: float, temple: bool) -> list[Primitive] | None:
+    def gabled(self, polygon: Polygon, height: float, skin: str) -> list[Primitive] | None:
         rectangle = polygon.minimum_rotated_rectangle
         if not isinstance(rectangle, Polygon) or rectangle.area <= 0:
             return None
@@ -561,7 +1038,7 @@ class SceneRenderer:
             ([e1, e2, ridge_b], "gable"),
         ]
         project = self.projection.world_to_native
-        primitives = self._walls(polygon, eave, temple)
+        primitives = self._walls(polygon, eave, skin)
         for face, kind in faces:
             facing, lit = self._front_facing(face, interior)
             if not facing:
@@ -596,19 +1073,24 @@ class SceneRenderer:
 
     def building(self, polygon: Polygon, properties: dict) -> list[Primitive]:
         height = properties["render_height_m"]
-        temple = properties["is_temple"]
+        traditional = properties["is_temple"] or (
+            not self.precincts.is_empty and self.precincts.contains(polygon.representative_point())
+        )
+        skin = "temple" if traditional else self.material(polygon, properties)
         shape = properties.get("roof_shape")
+        if traditional and shape == "flat":
+            shape = "gabled"
         if shape == "spire":
-            return self.spire(polygon, height, temple)
+            return self.spire(polygon, height, skin)
         if shape == "prang":
             return self.prang(polygon, height)
         if shape == "chedi":
             return self.chedi(polygon, height)
         if shape == "gabled":
-            primitives = self.gabled(polygon, height, temple)
+            primitives = self.gabled(polygon, height, skin)
             if primitives is not None:
                 return primitives
-        return self.prism(polygon, height, temple)
+        return self.prism(polygon, height, skin, properties["source_id"])
 
     def tree(self, point: Point, properties: dict) -> list[Primitive]:
         ppm = self.config.pixels_per_metre
@@ -644,15 +1126,35 @@ class SceneRenderer:
             ),
         ]
 
+    def _cells(self, primitives: list[Primitive], lift_px: int = 0) -> set[tuple[int, int]]:
+        xs: list[float] = []
+        ys: list[float] = []
+        for primitive in primitives:
+            if primitive.points:
+                xs.extend(x for x, _ in primitive.points)
+                ys.extend(y for _, y in primitive.points)
+        if not xs:
+            return set()
+        size = FRONT_CELL_PX
+        return {
+            (cx, cy)
+            for cx in range(math.floor(min(xs)) // size, math.floor(max(xs)) // size + 1)
+            for cy in range(
+                (math.floor(min(ys)) - lift_px) // size, math.floor(max(ys)) // size + 1
+            )
+        }
+
     def buildings_and_vegetation(
         self,
         buildings: list[tuple[BaseGeometry, dict]],
         trees: list[tuple[BaseGeometry, dict]],
-    ) -> tuple[Image.Image, Image.Image]:
-        building_layer, vegetation_layer = self._blank(), self._blank()
+        decks: list[Deck] = (),  # type: ignore[assignment]
+    ) -> tuple[Image.Image, Image.Image, Image.Image]:
+        """Buildings, vegetation and `front`: what stands in front of an elevated deck."""
+        building_layer, vegetation_layer, front = self._blank(), self._blank(), self._blank()
         matrix = self.projection.screen_ground_matrix()
         lift_per_metre = self.cos_elevation * self.config.pixels_per_metre
-        items: list[tuple[str, BaseGeometry, dict]] = []
+        items: list[tuple[str, Any, dict]] = []
         footprints: list[Polygon] = []
         keys: list[str] = []
         raised: list[float] = []
@@ -669,30 +1171,58 @@ class SceneRenderer:
             footprints.append(affine_transform(footprint, matrix))
             keys.append(properties["source_id"])
             raised.append((properties["height_m"] + properties["crown_radius_m"]) * lift_per_metre)
-        for index in back_to_front(footprints, keys, raised):
+        for deck in decks:
+            items.append(("deck", deck, deck.properties))
+            footprints.append(affine_transform(deck.footprint, matrix))
+            keys.append(deck.key)
+            raised.append(max(deck.z0, deck.z1) * lift_per_metre)
+        deck_cells: set[tuple[int, int]] = set()
+        soft = [kind == "tree" for kind, _, _ in items]
+        for index in back_to_front(footprints, keys, raised, soft):
             kind, geometry, properties = items[index]
+            if kind == "deck":
+                primitives = self.deck(geometry)
+                self.paint(building_layer, primitives)
+                self.paint(vegetation_layer, primitives, erase=True)
+                self.paint(front, primitives, erase=True)
+                deck_cells |= self._cells(primitives, TRAIN_CLEARANCE_PX)
+                continue
             if kind == "building":
                 primitives = self.building(geometry, properties)
                 self.paint(building_layer, primitives)
                 self.paint(vegetation_layer, primitives, erase=True)
             else:
-                self.paint(vegetation_layer, self.tree(geometry, properties))
-        return building_layer, vegetation_layer
+                primitives = self.tree(geometry, properties)
+                self.paint(vegetation_layer, primitives)
+            if deck_cells and not deck_cells.isdisjoint(self._cells(primitives)):
+                self.paint(front, primitives)
+        return building_layer, vegetation_layer, front
 
 
 def render_layers(
-    bounds: MapBounds, render: RenderConfig, layers: dict[str, list[tuple[BaseGeometry, dict]]]
+    bounds: MapBounds,
+    render: RenderConfig,
+    layers: dict[str, list[tuple[BaseGeometry, dict]]],
+    projection: IsoProjection | None = None,
 ) -> dict[str, Image.Image]:
-    scene = SceneRenderer(bounds, render)
-    buildings, vegetation = scene.buildings_and_vegetation(layers["buildings"], layers["trees"])
+    scene = SceneRenderer(bounds, render, projection)
+    scene.set_precincts(layers.get("ground", []))
+    rail = layers.get("rail", [])
+    decks = scene.decks(layers["roads"], rail)
+    buildings, vegetation, front = scene.buildings_and_vegetation(
+        layers["buildings"], layers["trees"], decks
+    )
     return {
         "terrain": scene.terrain(),
+        "ground": scene.ground(layers.get("ground", [])),
         "water": scene.water(layers["water"]),
         "green": scene.green(layers["green"]),
         "roads": scene.roads(layers["roads"]),
-        "shadows": scene.shadows(layers["buildings"], layers["trees"]),
+        "rail": scene.rail(rail),
+        "shadows": scene.shadows(layers["buildings"], layers["trees"], decks),
         "buildings": buildings,
         "vegetation": vegetation,
+        "front": front,
     }
 
 
@@ -710,22 +1240,58 @@ def load_layers(
     files = {
         "buildings": "buildings.enriched.geojson",
         "roads": "roads.geojson",
+        "rail": "rail.geojson",
         "water": "water.geojson",
         "green": "green.geojson",
+        "ground": "ground.geojson",
         "trees": "trees.enriched.geojson",
     }
-    return {name: world_geometries(processed_dir / file, bounds) for name, file in files.items()}
+    from .trees import COMPACT_NAME, read_compact
+
+    compact = processed_dir / COMPACT_NAME
+    return {
+        name: read_compact(compact)
+        if name == "trees" and compact.exists()
+        else world_geometries(processed_dir / file, bounds)
+        for name, file in files.items()
+        if name not in {"ground", "rail"} or (processed_dir / file).exists()
+    }
+
+
+def inputs_key(render: RenderConfig, bounds: MapBounds, processed_dir: Path) -> str:
+    """Identifies a render's inputs (config, bounds, processed layer files) for resuming."""
+    import dataclasses
+    import hashlib
+    import json
+
+    digest = hashlib.sha256(json.dumps(dataclasses.asdict(render), sort_keys=True).encode())
+    digest.update(json.dumps(bounds.to_dict(), sort_keys=True).encode())
+    for path in sorted(processed_dir.glob("*.geojson")):
+        stat = path.stat()
+        digest.update(f"{path.name}:{stat.st_size}:{stat.st_mtime_ns}".encode())
+    return digest.hexdigest()
 
 
 def run(area: AreaConfig, render: RenderConfig, processed_dir: Path, build_dir: Path) -> Path:
+    from .blocks import render_blocks
+
     bounds = MapBounds.from_area(area)
-    layers = render_layers(bounds, render, load_layers(processed_dir, bounds))
-    layer_dir = build_dir / "layers"
-    layer_dir.mkdir(parents=True, exist_ok=True)
-    for index, name in enumerate(LAYER_ORDER):
-        layers[name].save(layer_dir / f"{index}-{name}.png")
-    image = composite(layers, parse_color(render.palette["background"]))
-    output = build_dir / "render.png"
-    image.save(output)
-    log.info("rendered %dx%d native image to %s", image.width, image.height, output)
-    return output
+    blocks_dir = build_dir / "blocks"
+    layers = load_layers(processed_dir, bounds)
+    gc.collect()
+    gc.freeze()
+    info = render_blocks(
+        bounds,
+        render,
+        layers,
+        blocks_dir,
+        inputs_key=inputs_key(render, bounds, processed_dir),
+    )
+    log.info(
+        "rendered %dx%d native image in %d blocks to %s",
+        info["width"],
+        info["height"],
+        len(info["blocks"]),
+        blocks_dir,
+    )
+    return blocks_dir

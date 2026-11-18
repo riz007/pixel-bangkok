@@ -1,14 +1,30 @@
 "use client";
 
 import type OpenSeadragon from "openseadragon";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, type RefObject, useEffect, useId, useRef, useState } from "react";
 
-import { imageToViewport, tileSourceOptions } from "@/lib/coords";
+import { imageToViewport, type Point, tileSourceOptions, viewportToImage } from "@/lib/coords";
+import { type Lang, placeName, STRINGS } from "@/lib/i18n";
 import type { PointOfInterest, TileManifest } from "@/lib/manifest";
+import { parseMotion } from "@/lib/motion";
+import { visibleMarkerIds } from "@/lib/visibility";
 
+import { toggleFullscreen, useFullscreen } from "./fullscreen";
+import { PixelIcon } from "./icons";
 import { categoryInfo } from "./poiCategories";
+import { TrafficLayer } from "./traffic";
 
 type ViewerStatus = "loading" | "ready" | "error";
+
+const COMPACT_MARKER_ZOOM = 0.35;
+const FOCUS_IMAGE_ZOOM = 0.6;
+
+export interface MapCommands {
+  zoomBy: (factor: number) => void;
+  home: () => void;
+  center: () => Point | null;
+  goTo: (point: Point) => void;
+}
 
 interface MapViewerProps {
   manifest: TileManifest;
@@ -16,26 +32,107 @@ interface MapViewerProps {
   pois: PointOfInterest[];
   selectedPoiId: string | null;
   onSelectPoi: (id: string) => void;
+  aiOn: boolean;
+  playing: boolean;
+  showLabels: boolean;
+  lang: Lang;
+  tourNumbers: Map<string, number>;
+  commandsRef: RefObject<MapCommands | null>;
+  onAnimationAvailable: (available: boolean) => void;
+  pin: Point | null;
+}
+
+/** Clockwise screen angle of world north, from the published world -> image matrix. */
+function northDegrees(manifest: TileManifest): number {
+  const { px, py } = manifest.projection.worldToImage;
+  return (Math.atan2(px[1] ?? 0, -(py[1] ?? 0)) * 180) / Math.PI;
 }
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function MapViewer({ manifest, baseUrl, pois, selectedPoiId, onSelectPoi }: MapViewerProps) {
+function layerVersion(manifest: TileManifest, aiOn: boolean): string {
+  return aiOn && manifest.ai
+    ? `${manifest.contentVersion}-${manifest.ai.version}`
+    : manifest.contentVersion;
+}
+
+function baseTemplate(manifest: TileManifest, aiOn: boolean): string {
+  return aiOn && manifest.ai ? manifest.ai.urlTemplate : manifest.tiles.urlTemplate;
+}
+
+function overlayTemplate(manifest: TileManifest, aiOn: boolean): string | null {
+  if (aiOn && manifest.ai?.overlayUrlTemplate) return manifest.ai.overlayUrlTemplate;
+  return manifest.animation?.overlayUrlTemplate ?? null;
+}
+
+function frontTemplate(manifest: TileManifest, aiOn: boolean): string | null {
+  if (aiOn && manifest.ai?.frontOverlayUrlTemplate) return manifest.ai.frontOverlayUrlTemplate;
+  return manifest.animation?.frontUrlTemplate ?? null;
+}
+
+async function loadMotion(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} responded with ${response.status}`);
+  return parseMotion(await response.json());
+}
+
+export function MapViewer({
+  manifest,
+  baseUrl,
+  pois,
+  selectedPoiId,
+  onSelectPoi,
+  aiOn,
+  playing,
+  showLabels,
+  lang,
+  tourNumbers,
+  commandsRef,
+  onAnimationAvailable,
+  pin,
+}: MapViewerProps) {
+  const text = STRINGS[lang];
+  const fullscreen = useFullscreen();
+  const pinRef = useRef<HTMLDivElement>(null);
+  const pinPointRef = useRef(pin);
+  const positionRef = useRef<(() => void) | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const markerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const animationRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const trafficRef = useRef<TrafficLayer | null>(null);
+  const overlayViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+  const frontViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+  const upperRef = useRef<HTMLCanvasElement>(null);
+  const frontRef = useRef<HTMLDivElement>(null);
+  const navigatorId = `map-navigator-${useId().replace(/:/g, "")}`;
   const [status, setStatus] = useState<ViewerStatus>("loading");
   const [failedTiles, setFailedTiles] = useState(0);
+  const playingRef = useRef(playing);
+  const aiOnRef = useRef(aiOn);
+  const selectedRef = useRef(selectedPoiId);
+  const tourRef = useRef(tourNumbers);
+  const availableRef = useRef(onAnimationAvailable);
+  const focusRef = useRef<((id: string) => void) | null>(null);
+
+  useEffect(() => {
+    availableRef.current = onAnimationAvailable;
+    tourRef.current = tourNumbers;
+  }, [onAnimationAvailable, tourNumbers]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     let cancelled = false;
     let viewer: OpenSeadragon.Viewer | null = null;
+    let overlay: OpenSeadragon.Viewer | null = null;
+    let front: OpenSeadragon.Viewer | null = null;
     setStatus("loading");
     setFailedTiles(0);
+    availableRef.current(false);
 
     import("openseadragon")
       .then(({ default: OSD }) => {
@@ -43,15 +140,24 @@ export function MapViewer({ manifest, baseUrl, pois, selectedPoiId, onSelectPoi 
         let loadedTiles = 0;
         viewer = OSD({
           element: container,
-          tileSources: tileSourceOptions(manifest, baseUrl) as unknown as OpenSeadragon.TileSourceOptions,
+          tileSources: tileSourceOptions(
+            manifest,
+            baseUrl,
+            baseTemplate(manifest, aiOnRef.current),
+            layerVersion(manifest, aiOnRef.current),
+          ) as unknown as OpenSeadragon.TileSourceOptions,
           drawer: "canvas",
           imageSmoothingEnabled: false,
           showNavigationControl: false,
           showNavigator: true,
-          navigatorPosition: "BOTTOM_RIGHT",
+          navigatorId,
           navigatorSizeRatio: 0.16,
           minZoomImageRatio: 0.7,
-          maxZoomPixelRatio: 3,
+          maxZoomPixelRatio: 8,
+          minPixelRatio: 1,
+          smoothTileEdgesMinZoom: Infinity,
+          maxImageCacheCount: 1500,
+          imageLoaderLimit: 8,
           visibilityRatio: 0.6,
           constrainDuringPan: true,
           animationTime: prefersReducedMotion() ? 0 : 0.6,
@@ -59,32 +165,163 @@ export function MapViewer({ manifest, baseUrl, pois, selectedPoiId, onSelectPoi 
           gestureSettingsTouch: { clickToZoom: false, dblClickToZoom: true },
         });
         viewerRef.current = viewer;
+        const current = viewer;
+        commandsRef.current = {
+          zoomBy: (factor) => {
+            current.viewport.zoomBy(factor);
+            current.viewport.applyConstraints();
+          },
+          home: () => current.viewport.goHome(),
+          center: () =>
+            current.isOpen() ? viewportToImage(current.viewport.getCenter(true), manifest.image) : null,
+          goTo: (point) => goToImage(point),
+        };
 
         const positionMarkers = () => {
-          if (!viewer || !viewer.isOpen()) return;
+          if (!current.isOpen()) return;
+          const imageZoom = current.viewport.viewportToImageZoom(current.viewport.getZoom(true));
+          container.parentElement?.setAttribute(
+            "data-detail",
+            imageZoom < COMPACT_MARKER_ZOOM ? "compact" : "full",
+          );
+          const shown = visibleMarkerIds(pois, imageZoom, selectedRef.current);
+          for (const id of tourRef.current.keys()) shown.add(id);
           for (const poi of pois) {
             const marker = markerRefs.current.get(poi.id);
             if (!marker) continue;
+            marker.hidden = !shown.has(poi.id);
+            if (marker.hidden) continue;
             const location = imageToViewport(poi.image, manifest.image);
-            const pixel = viewer.viewport.viewportToViewerElementCoordinates(
+            const pixel = current.viewport.viewportToViewerElementCoordinates(
               new OSD.Point(location.x, location.y),
             );
             marker.style.transform = `translate(${pixel.x}px, ${pixel.y}px)`;
           }
+          const pinElement = pinRef.current;
+          const pinPoint = pinPointRef.current;
+          if (pinElement && pinPoint) {
+            const location = imageToViewport(pinPoint, manifest.image);
+            const pixel = current.viewport.viewportToViewerElementCoordinates(
+              new OSD.Point(location.x, location.y),
+            );
+            pinElement.style.transform = `translate(${pixel.x}px, ${pixel.y}px)`;
+          }
         };
+        positionRef.current = positionMarkers;
 
-        viewer.addHandler("open", positionMarkers);
-        viewer.addHandler("update-viewport", positionMarkers);
-        viewer.addHandler("resize", positionMarkers);
-        viewer.addHandler("open-failed", () => setStatus("error"));
-        viewer.addHandler("tile-loaded", () => {
+        const goToImage = (point: Point) => {
+          if (!current.isOpen()) return;
+          const location = imageToViewport(point, manifest.image);
+          const viewport = current.viewport;
+          const zoom = Math.max(viewport.getZoom(), viewport.imageToViewportZoom(FOCUS_IMAGE_ZOOM));
+          const bounds = viewport.getBounds();
+          const width = 1 / zoom;
+          const height = width * (bounds.height / bounds.width);
+          viewport.fitBounds(
+            new OSD.Rect(location.x - width / 2, location.y - height / 2, width, height),
+            prefersReducedMotion(),
+          );
+        };
+        focusRef.current = (id) => {
+          const poi = pois.find((entry) => entry.id === id);
+          if (poi) goToImage(poi.image);
+        };
+        current.addHandler("open", () => {
+          if (selectedRef.current) focusRef.current?.(selectedRef.current);
+        });
+        current.addHandler("open", positionMarkers);
+        current.addHandler("update-viewport", positionMarkers);
+        const followers: OpenSeadragon.Viewer[] = [];
+        let smoothing: boolean | null = null;
+        const updateSmoothing = () => {
+          if (!current.isOpen()) return;
+          const imageZoom = current.viewport.viewportToImageZoom(current.viewport.getZoom(true));
+          const wanted = imageZoom < 1;
+          if (wanted === smoothing) return;
+          smoothing = wanted;
+          for (const target of [current, ...followers]) {
+            target.drawer.setImageSmoothingEnabled(wanted);
+          }
+        };
+        current.addHandler("update-viewport", updateSmoothing);
+        current.addHandler("resize", positionMarkers);
+        current.addHandler("open-failed", () => setStatus("error"));
+        current.addHandler("tile-loaded", () => {
           loadedTiles += 1;
           setStatus("ready");
         });
-        viewer.addHandler("tile-load-failed", () => {
+        current.addHandler("tile-load-failed", () => {
           setFailedTiles((count) => count + 1);
           if (loadedTiles === 0) setStatus("error");
         });
+
+        const animation = manifest.animation;
+        const canvas = animationRef.current;
+        const overlayContainer = overlayRef.current;
+        if (!animation?.motionUrl || !canvas || !overlayContainer) return;
+        const follow = (element: HTMLElement, template: string) => {
+          const follower: OpenSeadragon.Viewer = OSD({
+            element,
+            tileSources: tileSourceOptions(
+              manifest,
+              baseUrl,
+              template,
+              layerVersion(manifest, aiOnRef.current),
+            ) as unknown as OpenSeadragon.TileSourceOptions,
+            drawer: "canvas",
+            imageSmoothingEnabled: false,
+            showNavigationControl: false,
+            mouseNavEnabled: false,
+            minZoomImageRatio: 0,
+            maxZoomPixelRatio: 1000,
+            minPixelRatio: 1,
+            smoothTileEdgesMinZoom: Infinity,
+            maxImageCacheCount: 1500,
+            imageLoaderLimit: 4,
+            visibilityRatio: 0,
+            constrainDuringPan: false,
+            animationTime: 0,
+          });
+          const sync = () => {
+            if (!follower.isOpen()) return;
+            follower.viewport.zoomTo(current.viewport.getZoom(true), undefined, true);
+            follower.viewport.panTo(current.viewport.getCenter(true), true);
+          };
+          current.addHandler("viewport-change", sync);
+          current.addHandler("resize", sync);
+          follower.addHandler("open", sync);
+          followers.push(follower);
+          smoothing = null;
+          return follower;
+        };
+        const template = overlayTemplate(manifest, aiOnRef.current);
+        if (template) {
+          overlay = follow(overlayContainer, template);
+          overlayViewerRef.current = overlay;
+        }
+        const frontTemplateValue = frontTemplate(manifest, aiOnRef.current);
+        if (frontTemplateValue && frontRef.current) {
+          front = follow(frontRef.current, frontTemplateValue);
+          frontViewerRef.current = front;
+        }
+        loadMotion(`${baseUrl}/${animation.motionUrl}?v=${manifest.contentVersion}`)
+          .then((motion) => {
+            if (cancelled) return;
+            const traffic = new TrafficLayer(
+              canvas,
+              current,
+              OSD,
+              manifest,
+              motion,
+              playingRef.current,
+              motion.rail.length > 0 ? upperRef.current : null,
+            );
+            trafficRef.current = traffic;
+            traffic.start();
+            canvas.dataset.vehicles = String(traffic.vehicleCount);
+            availableRef.current(true);
+          })
+          .catch((error: unknown) => console.warn("Animation unavailable", error));
       })
       .catch((error: unknown) => {
         console.error("Failed to start the map viewer", error);
@@ -94,40 +331,81 @@ export function MapViewer({ manifest, baseUrl, pois, selectedPoiId, onSelectPoi 
     return () => {
       cancelled = true;
       viewerRef.current = null;
+      commandsRef.current = null;
+      focusRef.current = null;
+      trafficRef.current?.destroy();
+      trafficRef.current = null;
+      overlayViewerRef.current = null;
+      frontViewerRef.current = null;
+      overlay?.destroy();
+      front?.destroy();
       viewer?.destroy();
     };
-  }, [manifest, baseUrl, pois]);
+  }, [manifest, baseUrl, pois, navigatorId, commandsRef]);
 
   useEffect(() => {
-    const viewer = viewerRef.current;
-    const poi = pois.find((entry) => entry.id === selectedPoiId);
-    if (!viewer || !poi || !viewer.isOpen()) return;
-    const location = imageToViewport(poi.image, manifest.image);
-    import("openseadragon").then(({ default: OSD }) => {
-      viewer.viewport.panTo(new OSD.Point(location.x, location.y), prefersReducedMotion());
-    });
-  }, [selectedPoiId, pois, manifest]);
+    if (aiOnRef.current === aiOn) return;
+    aiOnRef.current = aiOn;
+    const swap = (viewer: OpenSeadragon.Viewer | null, template: string | null) => {
+      if (!viewer || !template || !viewer.isOpen()) return;
+      const previous = viewer.world.getItemAt(0);
+      viewer.addTiledImage({
+        tileSource: tileSourceOptions(
+          manifest,
+          baseUrl,
+          template,
+          layerVersion(manifest, aiOn),
+        ) as unknown as OpenSeadragon.TileSourceOptions,
+        index: 0,
+        success: () => {
+          if (previous) viewer.world.removeItem(previous);
+        },
+      });
+    };
+    swap(viewerRef.current, baseTemplate(manifest, aiOn));
+    swap(overlayViewerRef.current, overlayTemplate(manifest, aiOn));
+    swap(frontViewerRef.current, frontTemplate(manifest, aiOn));
+  }, [aiOn, manifest, baseUrl]);
 
-  const zoomBy = (factor: number) => {
-    const viewport = viewerRef.current?.viewport;
-    if (!viewport) return;
-    viewport.zoomBy(factor);
-    viewport.applyConstraints();
-  };
+  useEffect(() => {
+    playingRef.current = playing;
+    trafficRef.current?.setPlaying(playing);
+  }, [playing]);
+
+  useEffect(() => {
+    pinPointRef.current = pin;
+    positionRef.current?.();
+  }, [pin]);
+
+  useEffect(() => {
+    selectedRef.current = selectedPoiId;
+    if (selectedPoiId) focusRef.current?.(selectedPoiId);
+  }, [selectedPoiId]);
 
   return (
-    <div className="map" data-status={status}>
+    <div className="map" data-status={status} data-labels={showLabels ? "on" : "off"}>
       <div
         ref={containerRef}
         className="map__canvas"
         role="application"
-        aria-label={`Isometric map of ${manifest.name.en}. Use arrow keys to pan and plus or minus to zoom.`}
+        aria-label={
+          lang === "th"
+            ? `แผนที่ไอโซเมตริกของ${manifest.name.th ?? manifest.name.en} ใช้ปุ่มลูกศรเพื่อเลื่อน และปุ่มบวกลบเพื่อซูม`
+            : `Isometric map of ${manifest.name.en}. Use arrow keys to pan and plus or minus to zoom.`
+        }
       />
+
+      <canvas ref={animationRef} className="map__animation" aria-hidden="true" />
+      <div ref={overlayRef} className="map__overlay" aria-hidden="true" />
+      <canvas ref={upperRef} className="map__animation map__animation--upper" aria-hidden="true" />
+      <div ref={frontRef} className="map__overlay map__overlay--front" aria-hidden="true" />
 
       <div className="map__markers">
         {pois.map((poi) => {
           const category = categoryInfo(poi.category);
           const selected = poi.id === selectedPoiId;
+          const number = tourNumbers.get(poi.id);
+          const names = placeName(poi, lang);
           return (
             <button
               key={poi.id}
@@ -139,50 +417,74 @@ export function MapViewer({ manifest, baseUrl, pois, selectedPoiId, onSelectPoi 
               className="marker"
               data-category={poi.category}
               data-poi-id={poi.id}
+              data-tour={number !== undefined ? "yes" : "no"}
               aria-pressed={selected}
-              aria-label={`${poi.nameEn}, ${category.label}`}
+              aria-label={`${number !== undefined ? `${number}. ` : ""}${names.primary}, ${category.label}`}
               onClick={() => onSelectPoi(poi.id)}
             >
               <span className="marker__pin" aria-hidden="true">
-                {category.glyph}
+                {number ?? category.glyph}
               </span>
               <span className="marker__label" aria-hidden="true">
-                {poi.nameEn}
+                {names.primary}
               </span>
             </button>
           );
         })}
       </div>
 
-      <div className="map__controls" role="group" aria-label="Map controls">
-        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.5)}>
+      <div ref={pinRef} className="map__pin" hidden={!pin}>
+        <span role="img" aria-label={text.searchedLocation} />
+      </div>
+
+      <div id={navigatorId} className="map__navigator" aria-hidden="true" />
+      <div
+        className="map__compass"
+        role="img"
+        aria-label={text.northArrow}
+        style={{ "--north": `${northDegrees(manifest)}deg` } as CSSProperties}
+      >
+        <span className="map__compass-arrow" aria-hidden="true">
+          ▲
+        </span>
+        <span aria-hidden="true">{lang === "th" ? "เหนือ" : "N"}</span>
+      </div>
+
+      <div className="map__zoom" role="group" aria-label={text.zoomGroup}>
+        <button type="button" aria-label={text.zoomIn} onClick={() => commandsRef.current?.zoomBy(1.5)}>
           <span aria-hidden="true">+</span>
         </button>
-        <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.5)}>
+        <button type="button" aria-label={text.zoomOut} onClick={() => commandsRef.current?.zoomBy(1 / 1.5)}>
           <span aria-hidden="true">−</span>
         </button>
-        <button
-          type="button"
-          aria-label="Reset view"
-          onClick={() => viewerRef.current?.viewport.goHome()}
-        >
+        <button type="button" aria-label={text.home} onClick={() => commandsRef.current?.home()}>
           <span aria-hidden="true">⌂</span>
         </button>
+        {fullscreen.available && (
+          <button
+            type="button"
+            aria-label={fullscreen.active ? text.exitFullscreen : text.fullscreen}
+            aria-pressed={fullscreen.active}
+            onClick={toggleFullscreen}
+          >
+            <PixelIcon name={fullscreen.active ? "shrink" : "expand"} />
+          </button>
+        )}
       </div>
 
       {status === "loading" && (
         <p className="map__status" role="status">
-          Loading map tiles…
+          {text.loadingTiles}
         </p>
       )}
       {status === "error" && (
         <p className="map__status map__status--error" role="alert">
-          The map image could not be loaded. Check your connection and reload the page.
+          {text.mapUnavailable}. {text.mapUnavailableHint}
         </p>
       )}
       {status === "ready" && failedTiles > 0 && (
         <p className="map__notice" role="status">
-          Some map tiles failed to load; parts of the map may be blurry or missing.
+          {text.tilesFailed}
         </p>
       )}
     </div>

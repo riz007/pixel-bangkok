@@ -1,14 +1,6 @@
-import importlib.util
-import sys
-from pathlib import Path
-
 from PIL import Image, ImageChops, ImageDraw
 
-SCRIPT = Path(__file__).resolve().parents[1] / "experiments" / "ai_repaint_trial.py"
-spec = importlib.util.spec_from_file_location("ai_repaint_trial", SCRIPT)
-trial = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = trial
-spec.loader.exec_module(trial)
+from pixel_bangkok import drift as trial
 
 
 def _scene() -> Image.Image:
@@ -45,3 +37,24 @@ def test_missing_building_lowers_recall():
     metrics = trial.drift(_scene(), altered)
     assert metrics["edge_recall"] < 0.8
     assert metrics["mean_abs_change"] > 0
+
+
+def test_uniform_offset_is_registered_back():
+    shifted = ImageChops.offset(_scene(), 3, -2)
+    aligned, dx, dy = trial.register(_scene(), shifted)
+    assert (dx, dy) == (-3, 2)
+    metrics = trial.drift(_scene(), aligned)
+    assert metrics["max_local_shift_px"] == 0
+    assert metrics["passes"] is True
+
+
+def test_unmatched_texture_fails_the_gate():
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.default_rng(0)
+    noise = Image.fromarray(rng.integers(0, 256, (256, 256, 3), dtype=np.uint8), "RGB")
+    other = Image.fromarray(rng.integers(0, 256, (256, 256, 3), dtype=np.uint8), "RGB")
+    metrics = trial.drift(noise, other)
+    assert metrics["unmatched_fraction"] > 0.3
+    assert metrics["passes"] is False

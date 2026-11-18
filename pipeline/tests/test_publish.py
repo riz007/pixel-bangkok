@@ -106,3 +106,29 @@ def test_config_validation(render_config):
     assert area.tree_canopy is not None and area.building_heights is None
     assert render_config.pixels_per_metre >= 1
     assert render_config.tiles.format in {"webp", "png"}
+
+
+def test_thumbnails_are_cropped_from_blocks(tmp_path):
+    from PIL import Image
+
+    from pixel_bangkok.blocks import block_grid
+    from pixel_bangkok.publish import THUMBNAIL_SIZE, write_thumbnails
+
+    blocks_dir = tmp_path / "blocks"
+    blocks_dir.mkdir()
+    blocks = block_grid(800, 600, 512)
+    for block in blocks:
+        Image.new("RGB", (block.width, block.height), (10, 200, 30)).save(
+            blocks_dir / f"master_{block.name}.png"
+        )
+    (blocks_dir / "blocks.json").write_text(
+        json.dumps(
+            {"width": 800, "height": 600, "block_px": 512, "blocks": [b.__dict__ for b in blocks]}
+        )
+    )
+    pois = [{"id": "temple", "image": {"x": 512.4, "y": 300.0}}]
+    assert write_thumbnails(pois, tmp_path, tmp_path / "places") == 1
+    assert pois[0]["thumbnail"] == "places/temple.webp"
+    with Image.open(tmp_path / "places" / "temple.webp") as thumb:
+        assert thumb.size == THUMBNAIL_SIZE
+    assert write_thumbnails(pois, tmp_path / "missing", tmp_path / "x") == 0

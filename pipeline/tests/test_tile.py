@@ -55,7 +55,7 @@ def test_manifest_describes_image_tiles_and_projection(area, bounds, render_conf
     assert manifest["tiles"]["max_level"] == levels[-1]["level"]
     assert manifest["projection"]["world_to_image"] == projection.master_matrix()
     assert manifest["projection"]["bounds"]["crs"] == "EPSG:32647"
-    assert manifest["version"] == 2
+    assert manifest["version"] == 3
     assert manifest["attributions"] == [
         {
             "text": area.source.attribution,
@@ -102,3 +102,37 @@ def test_manifest_credits_raster_sources_that_were_used(render_config):
         "licence": "CC BY 4.0",
         "provider": "Heights",
     }
+
+
+def test_box_pool_averages_and_ignores_transparent_colour():
+    import numpy as np
+
+    from pixel_bangkok.tile import _pack, _unpack, box_pool
+
+    image = Image.new("RGBA", (2, 2), (200, 0, 0, 255))
+    image.putpixel((1, 1), (0, 0, 200, 255))
+    pooled = _unpack(box_pool(_pack(image)), "RGBA")
+    assert pooled.getpixel((0, 0)) == (150, 0, 50, 255)
+    overlay = Image.new("RGBA", (2, 2), (0, 255, 0, 0))
+    overlay.putpixel((0, 0), (200, 100, 50, 255))
+    pooled = _unpack(box_pool(_pack(overlay)), "RGBA")
+    assert pooled.getpixel((0, 0)) == (200, 100, 50, 64)
+    assert box_pool(np.zeros((3, 5), dtype=np.uint32)).shape == (2, 3)
+
+
+def test_lower_levels_blend_fine_patterns(tmp_path):
+    master = Image.new("RGB", (300, 200), (200, 0, 0))
+    for x in range(0, 300, 2):
+        for y in range(200):
+            master.putpixel((x, y), (0, 0, 200))
+    tiles = TileConfig(tile_size=128, overlap=0, format="png", lossless=True)
+    levels = write_pyramid(master, tmp_path / "tiles", tiles)
+    with Image.open(tmp_path / "tiles" / str(levels[-2]["level"]) / "0_0.png") as tile:
+        assert tile.convert("RGB").getpixel((5, 5)) == (100, 0, 100)
+
+
+def test_no_pyramid_is_written_into_working_folders():
+    from pixel_bangkok.tile import PYRAMID_DIRS
+
+    assert not set(PYRAMID_DIRS) & {"ai", "blocks", "layers"}
+    assert PYRAMID_DIRS["ai_tiles"] == "ai"

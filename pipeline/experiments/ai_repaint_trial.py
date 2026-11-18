@@ -21,13 +21,13 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import numpy as np
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pixel_bangkok.config import Paths, load_area_config, load_render_config  # noqa: E402
 from pixel_bangkok.crs import MapBounds  # noqa: E402
+from pixel_bangkok.drift import drift  # noqa: E402
 from pixel_bangkok.projection import IsoProjection  # noqa: E402
 
 COMMAND = "mflux-generate-qwen-2.1-edit"
@@ -45,10 +45,6 @@ WINDOWS = {
     "west-bank-streets": (100.48770, 13.74240),
 }
 CROP_PX = 512
-EDGE_TOLERANCE_PX = 2
-BLOCK_PX = 128
-MAX_LOCAL_SHIFT_PX = 2
-MIN_EDGE_RECALL = 0.9
 
 
 @dataclass
@@ -69,73 +65,6 @@ def crop_box(area_id: str, lon: float, lat: float) -> tuple[int, int, int, int]:
     left = int(round(x)) - CROP_PX // 2
     top = int(round(y)) - CROP_PX // 2
     return left, top, left + CROP_PX, top + CROP_PX
-
-
-def luminance_edges(image: Image.Image) -> np.ndarray:
-    grey = np.asarray(image.convert("L"), dtype=np.float32)
-    gx = np.zeros_like(grey)
-    gy = np.zeros_like(grey)
-    gx[:, 1:-1] = grey[:, 2:] - grey[:, :-2]
-    gy[1:-1, :] = grey[2:, :] - grey[:-2, :]
-    magnitude = np.hypot(gx, gy)
-    return magnitude > max(24.0, float(np.percentile(magnitude, 85)))
-
-
-def dilate(mask: np.ndarray, radius: int) -> np.ndarray:
-    out = mask.copy()
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            out |= np.roll(np.roll(mask, dy, axis=0), dx, axis=1)
-    return out
-
-
-def phase_shift(a: np.ndarray, b: np.ndarray) -> tuple[int, int]:
-    fa = np.fft.fft2(a - a.mean())
-    fb = np.fft.fft2(b - b.mean())
-    cross = fa * np.conj(fb)
-    cross /= np.abs(cross) + 1e-9
-    peak = np.unravel_index(np.argmax(np.abs(np.fft.ifft2(cross))), a.shape)
-    dy, dx = (int(v) if v <= s // 2 else int(v - s) for v, s in zip(peak, a.shape, strict=True))
-    return dx, dy
-
-
-def local_shifts(reference: np.ndarray, repainted: np.ndarray) -> list[tuple[int, int]]:
-    shifts = []
-    for top in range(0, reference.shape[0] - BLOCK_PX + 1, BLOCK_PX):
-        for left in range(0, reference.shape[1] - BLOCK_PX + 1, BLOCK_PX):
-            a = reference[top : top + BLOCK_PX, left : left + BLOCK_PX]
-            b = repainted[top : top + BLOCK_PX, left : left + BLOCK_PX]
-            if a.std() >= 5:
-                shifts.append(phase_shift(a, b))
-    return shifts
-
-
-def drift(reference: Image.Image, repainted: Image.Image) -> dict[str, float]:
-    ref_edges = luminance_edges(reference)
-    out_edges = luminance_edges(repainted)
-    grey_reference = np.asarray(reference.convert("L"), np.float32)
-    grey_repainted = np.asarray(repainted.convert("L"), np.float32)
-    dx, dy = phase_shift(grey_reference, grey_repainted)
-    blocks = local_shifts(grey_reference, grey_repainted)
-    worst = max((max(abs(x), abs(y)) for x, y in blocks), default=0)
-    recall = float(
-        (ref_edges & dilate(out_edges, EDGE_TOLERANCE_PX)).sum() / max(ref_edges.sum(), 1)
-    )
-    precision = float(
-        (out_edges & dilate(ref_edges, EDGE_TOLERANCE_PX)).sum() / max(out_edges.sum(), 1)
-    )
-    change = np.abs(
-        np.asarray(reference, np.float32) - np.asarray(repainted.convert("RGB"), np.float32)
-    ).mean()
-    return {
-        "mean_abs_change": round(float(change), 2),
-        "shift_x_px": dx,
-        "shift_y_px": dy,
-        "edge_recall": round(recall, 3),
-        "edge_precision": round(precision, 3),
-        "max_local_shift_px": worst,
-        "passes": bool(worst <= MAX_LOCAL_SHIFT_PX and recall >= MIN_EDGE_RECALL),
-    }
 
 
 def run_model(source: Path, output: Path, settings: Settings, size: int, log: Path) -> float:
@@ -237,8 +166,7 @@ def main() -> int:
         "prompt": PROMPT,
         "settings": asdict(settings),
         "crop_px": CROP_PX,
-        "edge_tolerance_px": EDGE_TOLERANCE_PX,
-        "gate": {"max_local_shift_px": MAX_LOCAL_SHIFT_PX, "min_edge_recall": MIN_EDGE_RECALL},
+        "gate": "pixel_bangkok.drift",
         "machine": platform.machine(),
         "platform": platform.platform(),
         "results": results,

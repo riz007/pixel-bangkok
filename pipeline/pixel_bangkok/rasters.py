@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 import rasterio
 import rasterio.errors
+import rasterio.windows
 from rasterio.enums import Resampling
 from rasterio.features import geometry_mask
 from rasterio.transform import Affine, from_origin
@@ -41,6 +42,10 @@ from .crs import MapBounds
 log = logging.getLogger(__name__)
 
 NODATA = -99.0
+RAW_NODATA = 255
+CHUNK_PX = 2048
+HEIGHT_SCALES = (0.5, 1 / 200)
+CANOPY_SCALES = (1.0,)
 OPEN_BUILDINGS_BUCKET = "open-buildings-temporal-data"
 OPEN_BUILDINGS_LIST_URL = f"https://storage.googleapis.com/storage/v1/b/{OPEN_BUILDINGS_BUCKET}/o"
 CANOPY_BASE_URL = (
@@ -90,13 +95,27 @@ class AreaGrid:
 
 @dataclass(frozen=True)
 class RasterLayer:
+    """Raster bands on an area grid; uint8 bands carry a scale and decode on access."""
+
     data: np.ndarray
     transform: Affine
     crs: str
     band_names: tuple[str, ...]
+    scales: tuple[float, ...] | None = None
+
+    def raw(self, name: str) -> np.ndarray:
+        return self.data[self.band_names.index(name)]
+
+    def decode(self, name: str, values: np.ndarray) -> np.ndarray:
+        if self.scales is None:
+            return values.astype(np.float32, copy=False)
+        scale = self.scales[self.band_names.index(name)]
+        decoded = values.astype(np.float32) * scale
+        decoded[values == RAW_NODATA] = NODATA
+        return decoded
 
     def band(self, name: str) -> np.ndarray:
-        return self.data[self.band_names.index(name)]
+        return self.decode(name, self.raw(name))
 
 
 def _https(uri: str) -> str:
@@ -230,6 +249,70 @@ def resample_onto_grid(
     return destination
 
 
+def _encode(data: np.ndarray, scales: tuple[float, ...]) -> np.ndarray:
+    encoded = np.empty(data.shape, dtype=np.uint8)
+    for index, scale in enumerate(scales):
+        band = data[index]
+        quantised = np.clip(np.round(band / scale), 0, RAW_NODATA - 1).astype(np.uint8)
+        quantised[band == NODATA] = RAW_NODATA
+        encoded[index] = quantised
+    return encoded
+
+
+def fetch_onto_grid(
+    sources: list[str],
+    bands: list[int],
+    grid: AreaGrid,
+    src_nodata: float | None,
+    output: Path,
+    band_names: list[str],
+    scales: tuple[float, ...],
+) -> float:
+    """Resample sources onto the grid chunk by chunk into a compact uint8 GeoTIFF.
+
+    Returns the fraction of pixels with data.
+    """
+    output.parent.mkdir(parents=True, exist_ok=True)
+    covered = 0
+    with rasterio.open(
+        output,
+        "w",
+        driver="GTiff",
+        width=grid.width,
+        height=grid.height,
+        count=len(bands),
+        dtype="uint8",
+        crs=grid.crs,
+        transform=grid.transform,
+        nodata=RAW_NODATA,
+        compress="deflate",
+        tiled=True,
+        blockxsize=512,
+        blockysize=512,
+    ) as destination:
+        for index, name in enumerate(band_names, start=1):
+            destination.set_band_description(index, name)
+        destination.update_tags(scales=",".join(f"{scale:.10g}" for scale in scales))
+        for row in range(0, grid.height, CHUNK_PX):
+            for column in range(0, grid.width, CHUNK_PX):
+                window = Window(
+                    column,
+                    row,
+                    min(CHUNK_PX, grid.width - column),
+                    min(CHUNK_PX, grid.height - row),
+                )
+                chunk = AreaGrid(
+                    crs=grid.crs,
+                    transform=rasterio.windows.transform(window, grid.transform),
+                    width=int(window.width),
+                    height=int(window.height),
+                )
+                data = resample_onto_grid(sources, bands, chunk, src_nodata)
+                covered += int(np.count_nonzero(data[0] != NODATA))
+                destination.write(_encode(data, scales), window=window)
+    return covered / (grid.width * grid.height)
+
+
 def write_layer(path: Path, data: np.ndarray, grid: AreaGrid, band_names: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(
@@ -252,11 +335,13 @@ def write_layer(path: Path, data: np.ndarray, grid: AreaGrid, band_names: list[s
 
 def read_layer(path: Path) -> RasterLayer:
     with rasterio.open(path) as source:
+        scales_tag = source.tags().get("scales")
         return RasterLayer(
             data=source.read(),
             transform=source.transform,
             crs=str(source.crs),
             band_names=tuple(source.descriptions),
+            scales=tuple(float(v) for v in scales_tag.split(",")) if scales_tag else None,
         )
 
 
@@ -282,9 +367,9 @@ def fetch_building_heights(
     if not sources:
         raise RuntimeError("no Open Buildings rasters cover this area")
     bands = ["building_height", "building_presence"]
-    data = resample_onto_grid(sources, [band_indexes[band] for band in bands], grid, NODATA)
-    write_layer(output, data, grid, bands)
-    covered = float(np.mean(data[0] != NODATA))
+    covered = fetch_onto_grid(
+        sources, [band_indexes[band] for band in bands], grid, NODATA, output, bands, HEIGHT_SCALES
+    )
     log.info("building heights: %d source raster(s), %.0f%% coverage", len(sources), covered * 100)
     return {
         "dataset": config.dataset,
@@ -304,9 +389,7 @@ def fetch_tree_canopy(
 ) -> dict[str, Any]:
     grid = AreaGrid.for_bounds(bounds, config.resolution_m)
     sources = [f"{CANOPY_BASE_URL}/{key}.tif" for key in canopy_quadkeys(bounds)]
-    data = resample_onto_grid(sources, [1], grid, None)
-    write_layer(output, data, grid, ["canopy_height"])
-    covered = float(np.mean(data[0] != NODATA))
+    covered = fetch_onto_grid(sources, [1], grid, None, output, ["canopy_height"], CANOPY_SCALES)
     log.info("tree canopy: %d source raster(s), %.0f%% coverage", len(sources), covered * 100)
     return {
         "dataset": config.dataset,
@@ -324,17 +407,57 @@ def footprint_values(
 ) -> np.ndarray:
     """Raster values of `band` for pixels whose centres fall inside the footprint."""
     projected = translate(geometry_world, bounds.origin_easting, bounds.origin_northing)
-    data = layer.band(band)
+    data = layer.raw(band)
+    full = Window(0, 0, data.shape[1], data.shape[0])
+    try:
+        window = (
+            from_bounds(*projected.bounds, layer.transform)
+            .round_offsets(op="floor")
+            .round_lengths(op="ceil")
+        )
+        window = Window(window.col_off - 1, window.row_off - 1, window.width + 2, window.height + 2)
+        window = window.intersection(full)
+    except rasterio.errors.WindowError:
+        return data[:0, 0]
+    row_slice, column_slice = window.toslices()
+    block = layer.decode(band, data[row_slice, column_slice])
     inside = ~geometry_mask(
-        [mapping(projected)], out_shape=data.shape, transform=layer.transform, all_touched=False
+        [mapping(projected)],
+        out_shape=block.shape,
+        transform=rasterio.windows.transform(window, layer.transform),
+        all_touched=False,
     )
-    return data[inside]
+    return block[inside]
+
+
+def sample_points(
+    layer: RasterLayer, band: str, xs: np.ndarray, ys: np.ndarray, bounds: MapBounds
+) -> np.ndarray:
+    """Values at world points (nearest pixel); NODATA outside the raster."""
+    inverse = ~layer.transform
+    columns = np.floor(
+        inverse.a * (xs + bounds.origin_easting)
+        + inverse.b * (ys + bounds.origin_northing)
+        + inverse.c
+    )
+    rows = np.floor(
+        inverse.d * (xs + bounds.origin_easting)
+        + inverse.e * (ys + bounds.origin_northing)
+        + inverse.f
+    )
+    data = layer.raw(band)
+    inside = (rows >= 0) & (rows < data.shape[0]) & (columns >= 0) & (columns < data.shape[1])
+    values = np.full(xs.shape, NODATA, dtype=np.float32)
+    values[inside] = layer.decode(band, data[rows[inside].astype(int), columns[inside].astype(int)])
+    return values
 
 
 def sample_point(layer: RasterLayer, band: str, x: float, y: float, bounds: MapBounds) -> float:
     column, row = ~layer.transform @ (x + bounds.origin_easting, y + bounds.origin_northing)
-    data = layer.band(band)
+    data = layer.raw(band)
     row_index, column_index = int(math.floor(row)), int(math.floor(column))
     if not (0 <= row_index < data.shape[0] and 0 <= column_index < data.shape[1]):
         return NODATA
-    return float(data[row_index, column_index])
+    return float(
+        layer.decode(band, data[row_index : row_index + 1, column_index : column_index + 1])[0, 0]
+    )

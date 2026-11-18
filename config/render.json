@@ -4,7 +4,7 @@
     "elevation_deg": 30
   },
   "pixels_per_metre": 3,
-  "upscale": 3,
+  "upscale": 1,
   "max_height_m": 100,
   "seed": 20261115,
   "light": {
@@ -40,6 +40,14 @@
     "dash_m": 2.0,
     "gap_m": 2.5
   },
+  "sidewalk_m": 1.8,
+  "rooftop": {
+    "min_height_m": 8,
+    "min_area_m2": 40,
+    "tank_size_m": 1.6,
+    "unit_size_m": 0.9,
+    "max_items": 3
+  },
   "road_widths_m": {
     "motorway": 14,
     "trunk": 14,
@@ -62,18 +70,34 @@
     "canal": 8,
     "default": 4
   },
+  "transit": {
+    "layer_height_m": 5.0,
+    "rail_min_elevation_m": 12.0,
+    "road_min_elevation_m": 10.0,
+    "ramp_grade": 0.07,
+    "deck_thickness_m": 1.6,
+    "pillar_size_m": 2.0,
+    "pillar_spacing_m": 30.0,
+    "segment_m": 12.0,
+    "track_spacing_m": 4.5,
+    "rail_gauge_m": 1.2,
+    "ballast_width_m": 3.0,
+    "sleeper_spacing_m": 1.5,
+    "subway_dash_m": 4.0,
+    "subway_gap_m": 4.0
+  },
   "palette": {
     "background": "#1b1f2a",
-    "terrain": "#d9c9a3",
-    "terrain_edge": "#8a7a5c",
-    "water": "#3f7fa6",
-    "water_light": "#5a9bbf",
-    "water_edge": "#2c5f80",
-    "green": "#7fae5b",
-    "green_dark": "#5f8f45",
-    "road": "#8c8c94",
-    "road_major": "#a3a3ab",
-    "path": "#c2b08a",
+    "terrain": "#c7bea7",
+    "terrain_edge": "#7d755f",
+    "water": "#587a6e",
+    "water_light": "#6f9184",
+    "water_edge": "#3c5a50",
+    "green": "#7aa257",
+    "green_dark": "#648b46",
+    "road": "#64666d",
+    "road_major": "#5a5c63",
+    "path": "#c4bba6",
     "pier": "#9a7b55",
     "shadow": "#00000050",
     "outline": "#2a2430",
@@ -86,8 +110,8 @@
     "tree": "#3f7a3a",
     "tree_light": "#5c9a4c",
     "tree_trunk": "#6b4a2f",
-    "road_edge": "#6e6e78",
-    "road_marking": "#ece3c4",
+    "road_edge": "#46474d",
+    "road_marking": "#e6e3d6",
     "building_roof_edge": "#cbbfa9",
     "window": "#4f6178",
     "window_temple": "#9a5a2e",
@@ -96,9 +120,142 @@
     "tree_dark": "#2f5f2e",
     "window_light": "#8fa6bf",
     "contact_shadow": "#00000038",
-    "terrain_dither": "#cfbe97",
+    "terrain_dither": "#bdb49c",
     "roof_dither": "#d9cdb8",
-    "foam": "#a9d0e3"
+    "foam": "#a3bdaf",
+    "sidewalk": "#b9b3a6",
+    "ground_religious": "#dcd3bf",
+    "ground_paved": "#cfc8b7",
+    "ground_parking": "#8d8f95",
+    "ground_residential": "#c1b8a0",
+    "ground_commercial": "#c6bfae",
+    "ground_institutional": "#c9c1a8",
+    "ground_military": "#b9b49c",
+    "ground_palace": "#ddd5c2",
+    "rail_bed": "#8c8274",
+    "rail_sleeper": "#6e5c4a",
+    "rail_steel": "#3b3940",
+    "subway_trace": "#4a6aa8",
+    "viaduct_parapet": "#dedad0"
+  },
+  "materials": {
+    "viaduct": {
+      "wall_light": "#cfcbc1",
+      "wall_dark": "#8f8b83",
+      "roof": "#a9a69e",
+      "roof_edge": "#9a978f"
+    },
+    "building": {
+      "wall_light": "#c9b9a0",
+      "wall_dark": "#a08f7a",
+      "roof": "#e6dccb",
+      "roof_edge": "#cbbfa9"
+    },
+    "concrete_white": {
+      "wall_light": "#e3ded3",
+      "wall_dark": "#b2ab9e",
+      "roof": "#d7d1c5",
+      "roof_edge": "#bcb5a8"
+    },
+    "concrete_grey": {
+      "wall_light": "#c8c5be",
+      "wall_dark": "#99958d",
+      "roof": "#bdbab2",
+      "roof_edge": "#a5a199"
+    },
+    "shophouse_cream": {
+      "wall_light": "#e7d9b9",
+      "wall_dark": "#b8a782",
+      "roof": "#d2c8b3",
+      "roof_edge": "#b8ad96"
+    },
+    "shophouse_salmon": {
+      "wall_light": "#e2b9a0",
+      "wall_dark": "#b38b75",
+      "roof": "#cfc6b6",
+      "roof_edge": "#b4aa99"
+    },
+    "shophouse_mint": {
+      "wall_light": "#bdd3c5",
+      "wall_dark": "#8ea596",
+      "roof": "#cbc7bc",
+      "roof_edge": "#b1ada2"
+    },
+    "shophouse_yellow": {
+      "wall_light": "#e8d293",
+      "wall_dark": "#b8a26a",
+      "roof": "#d0c9b8",
+      "roof_edge": "#b6ae9c"
+    },
+    "shophouse_blue": {
+      "wall_light": "#b9c7d6",
+      "wall_dark": "#8b98a7",
+      "roof": "#c9c8c2",
+      "roof_edge": "#afaea8"
+    },
+    "metal_rust": {
+      "wall_light": "#d8ccb4",
+      "wall_dark": "#aa9e87",
+      "roof": "#a9694b",
+      "roof_edge": "#7e4b34",
+      "roof_texture": "metal"
+    },
+    "metal_grey": {
+      "wall_light": "#d3cdbf",
+      "wall_dark": "#a59f92",
+      "roof": "#9ba3a6",
+      "roof_edge": "#747c7f",
+      "roof_texture": "metal"
+    },
+    "metal_blue": {
+      "wall_light": "#d6cfbf",
+      "wall_dark": "#a8a191",
+      "roof": "#7189a0",
+      "roof_edge": "#55697c",
+      "roof_texture": "metal"
+    },
+    "tower_glass": {
+      "wall_light": "#a3b6c4",
+      "wall_dark": "#728797",
+      "roof": "#bcc1c5",
+      "roof_edge": "#989fa5",
+      "window": "#3f5568"
+    },
+    "rooftop_tank": {
+      "wall_light": "#eef1f2",
+      "wall_dark": "#b7c0c4",
+      "roof": "#dfe5e7"
+    },
+    "rooftop_unit": {
+      "wall_light": "#a7adb1",
+      "wall_dark": "#80868a",
+      "roof": "#9aa0a4"
+    }
+  },
+  "material_groups": {
+    "tower": [
+      "tower_glass",
+      "concrete_white",
+      "concrete_grey"
+    ],
+    "lowrise": [
+      "metal_rust",
+      "metal_grey",
+      "metal_blue",
+      "shophouse_cream",
+      "metal_rust",
+      "concrete_grey"
+    ],
+    "general": [
+      "shophouse_cream",
+      "shophouse_salmon",
+      "shophouse_mint",
+      "shophouse_yellow",
+      "shophouse_blue",
+      "concrete_white",
+      "concrete_grey",
+      "shophouse_cream"
+    ]
   },
   "tiles": {
     "tile_size": 512,

@@ -36,3 +36,15 @@ def test_crown_radius_is_clamped(render_config):
     assert crown_radius(1.0, config) == config.min_crown_radius_m
     assert crown_radius(100.0, config) == config.max_crown_radius_m
     assert crown_radius(8.0, config) == round(8.0 * config.crown_radius_per_metre, 2)
+
+
+def test_compact_tree_file_round_trips(tmp_path):
+    from pixel_bangkok.trees import read_compact, write_compact
+
+    path = tmp_path / "trees.render.npz"
+    write_compact(path, [(1.5, 2.5, 8.0, 3.0, "canopy/0"), (10.0, 20.0, 6.0, 2.5, "node/7")])
+    trees = read_compact(path)
+    assert [(p.x, p.y) for p, _ in trees] == [(1.5, 2.5), (10.0, 20.0)]
+    assert trees[1][1] == {"source_id": "node/7", "height_m": 6.0, "crown_radius_m": 2.5}
+    write_compact(path, [])
+    assert read_compact(path) == []

@@ -23,7 +23,41 @@ export interface TileManifest {
     levels: TileLevel[];
   };
   attributions: Attribution[];
+  projection: {
+    worldToImage: { px: number[]; py: number[] };
+    cameraAzimuthDeg: number;
+    pixelsPerMetre: number;
+    geographic: GeographicTransforms | null;
+  };
+  animation: {
+    overlayUrlTemplate: string | null;
+    frontUrlTemplate: string | null;
+    motionUrl: string | null;
+  } | null;
+  ai: {
+    urlTemplate: string;
+    overlayUrlTemplate: string | null;
+    frontOverlayUrlTemplate: string | null;
+    model: string;
+    licence: string;
+    coverage: number;
+    version: string;
+  } | null;
   source: { dataset: string; retrievedAt: string | null };
+  contentVersion: string;
+}
+
+export interface QuadraticFit {
+  origin: [number, number];
+  first: number[];
+  second: number[];
+}
+
+export interface GeographicTransforms {
+  widthM: number;
+  heightM: number;
+  lonLatToWorld: QuadraticFit;
+  worldToLonLat: QuadraticFit;
 }
 
 export interface Attribution {
@@ -44,6 +78,8 @@ export interface PointOfInterest {
   description: string;
   source: string | null;
   sourceUrl: string | null;
+  rank: number | null;
+  thumbnail: string | null;
   image: { x: number; y: number };
 }
 
@@ -52,7 +88,7 @@ export interface AreaSummary {
   name: { en: string; th: string | null };
 }
 
-export const SUPPORTED_MANIFEST_VERSION = 2;
+export const SUPPORTED_MANIFEST_VERSION = 3;
 
 type Json = Record<string, unknown>;
 
@@ -113,6 +149,40 @@ function parseName(value: unknown, context: string): { en: string; th: string | 
   return { en: text(name, "en", context), th: optionalText(name, "th", context) };
 }
 
+function coefficients(value: Json, key: string, context: string, count: number): number[] {
+  const values = list(value, key, context);
+  if (values.length !== count || !values.every((v) => typeof v === "number" && Number.isFinite(v))) {
+    throw new DataError(`${context}.${key} must be ${count} numbers`);
+  }
+  return values as number[];
+}
+
+function parseFit(value: unknown, keys: [string, string], context: string): QuadraticFit {
+  const fit = object(value, context);
+  const [x = 0, y = 0] = coefficients(fit, "origin", context, 2);
+  return {
+    origin: [x, y],
+    first: coefficients(fit, keys[0], context, 6),
+    second: coefficients(fit, keys[1], context, 6),
+  };
+}
+
+function parseGeographic(projection: Json): GeographicTransforms {
+  const context = "manifest.projection.geographic";
+  const geographic = object(projection.geographic, context);
+  const bounds = object(projection.bounds, "manifest.projection.bounds");
+  return {
+    widthM: number(bounds, "width_m", "manifest.projection.bounds"),
+    heightM: number(bounds, "height_m", "manifest.projection.bounds"),
+    lonLatToWorld: parseFit(geographic.lonlat_to_world, ["x", "y"], `${context}.lonlat_to_world`),
+    worldToLonLat: parseFit(
+      geographic.world_to_lonlat,
+      ["lon", "lat"],
+      `${context}.world_to_lonlat`,
+    ),
+  };
+}
+
 export function parseManifest(input: unknown): TileManifest {
   const root = object(input, "manifest");
   const version = number(root, "version", "manifest");
@@ -132,6 +202,48 @@ export function parseManifest(input: unknown): TileManifest {
     };
   });
   if (attributions.length === 0) throw new DataError("manifest.attributions must not be empty");
+  const projection = object(root.projection, "manifest.projection");
+  const matrix = object(projection.world_to_image, "manifest.projection.world_to_image");
+  const row = (key: "px" | "py") => {
+    const values = list(matrix, key, "manifest.projection.world_to_image");
+    if (values.length !== 4 || !values.every((v) => typeof v === "number" && Number.isFinite(v))) {
+      throw new DataError(`manifest.projection.world_to_image.${key} must be four numbers`);
+    }
+    return values as number[];
+  };
+  const camera = object(projection.camera, "manifest.projection.camera");
+  const geographic = projection.geographic === undefined ? null : parseGeographic(projection);
+  const animationValue = root.animation;
+  const animation =
+    animationValue === undefined
+      ? null
+      : (() => {
+          const value = object(animationValue, "manifest.animation");
+          return {
+            overlayUrlTemplate: optionalText(value, "overlay_url_template", "manifest.animation"),
+            frontUrlTemplate: optionalText(value, "front_url_template", "manifest.animation"),
+            motionUrl: optionalText(value, "motion_url", "manifest.animation"),
+          };
+        })();
+  const ai =
+    root.ai === undefined
+      ? null
+      : (() => {
+          const value = object(root.ai, "manifest.ai");
+          return {
+            urlTemplate: text(value, "url_template", "manifest.ai"),
+            overlayUrlTemplate: optionalText(value, "overlay_url_template", "manifest.ai"),
+            frontOverlayUrlTemplate: optionalText(
+              value,
+              "front_overlay_url_template",
+              "manifest.ai",
+            ),
+            model: text(value, "model", "manifest.ai"),
+            licence: text(value, "licence", "manifest.ai"),
+            coverage: number(value, "coverage", "manifest.ai"),
+            version: (optionalText(value, "composed_at", "manifest.ai") ?? "ai").replace(/\D/g, ""),
+          };
+        })();
   const source = object(root.source, "manifest.source");
   const levels = list(tiles, "levels", "manifest.tiles").map((entry, index) => {
     const context = `manifest.tiles.levels[${index}]`;
@@ -168,6 +280,20 @@ export function parseManifest(input: unknown): TileManifest {
       levels,
     },
     attributions,
+    projection: {
+      worldToImage: { px: row("px"), py: row("py") },
+      cameraAzimuthDeg: number(camera, "azimuth_deg", "manifest.projection.camera"),
+      pixelsPerMetre: number(projection, "pixels_per_metre", "manifest.projection"),
+      geographic,
+    },
+    animation,
+    ai,
+    contentVersion: (() => {
+      const generated = root.generated;
+      if (typeof generated !== "object" || generated === null) return "0";
+      const hash = (generated as Json).master_sha256;
+      return typeof hash === "string" ? hash.slice(0, 12) : "0";
+    })(),
     source: {
       dataset: text(source, "dataset", "manifest.source"),
       retrievedAt: optionalText(source, "retrieved_at", "manifest.source"),
@@ -205,6 +331,8 @@ export function parsePois(input: unknown, manifest: TileManifest): PointOfIntere
       description: typeof poi.description === "string" ? poi.description : "",
       source: optionalText(poi, "source", context),
       sourceUrl: optionalText(poi, "source_url", context),
+      rank: typeof poi.rank === "number" && Number.isFinite(poi.rank) ? poi.rank : null,
+      thumbnail: optionalText(poi, "thumbnail", context),
       image: { x, y },
     };
   });

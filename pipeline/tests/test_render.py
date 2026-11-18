@@ -66,7 +66,21 @@ def test_features_land_where_the_projection_says(bounds, render_config, scene):
         px, py = projection.world_to_native(x, y, z)
         return image.getpixel((round(px), round(py)))
 
-    assert pixel(50, 50, 12) == palette["building_roof"]
+    scene_renderer = SceneRenderer(bounds, render_config)
+    material = scene_renderer.material(
+        box(40, 40, 60, 60), {"render_height_m": 12.0, "source_id": "way/1"}
+    )
+    roof_colours = {
+        scene_renderer.color(name)[:3]
+        for name in (
+            f"{material}_roof",
+            "rooftop_tank_roof",
+            "rooftop_unit_roof",
+            "shade:rooftop_tank_roof",
+            "shade:rooftop_unit_roof",
+        )
+    }
+    assert pixel(50, 50, 12) in roof_colours
     assert pixel(95, 45, 6) in {
         palette["temple_roof"],
         palette["temple_roof_dark"],
@@ -84,11 +98,12 @@ def test_pixel_art_keeps_geometry_and_limited_palette(bounds, render_config, sce
     master = apply_pixel_art(image, render_config)
     scale = render_config.upscale
     assert master.size == (image.width * scale, image.height * scale)
-    assert unique_colors(master) <= 2 * len(render_config.palette)
+    colour_budget = 2 * (len(render_config.palette) + 5 * len(render_config.materials))
+    assert unique_colors(master) <= colour_budget
     projection = IsoProjection.create(bounds, render_config)
-    px, py = projection.world_to_master(50, 50, 12)
-    roof = parse_color(render_config.palette["building_roof"])[:3]
-    assert master.getpixel((round(px), round(py))) == roof
+    px, py = projection.world_to_master(100, 11.5)
+    road = parse_color(render_config.palette["road"])[:3]
+    assert master.getpixel((round(px), round(py))) == road
     assert _png(apply_pixel_art(image, render_config)) == _png(master)
 
 
@@ -113,7 +128,7 @@ def test_trees_are_hidden_behind_buildings_and_shown_in_front(bounds, render_con
     behind = _tree(38, 62, "behind")
     in_front = _tree(62, 38, "front")
     assert scene.projection.depth(38, 62) > scene.projection.depth(50, 50)
-    buildings, vegetation = scene.buildings_and_vegetation([_building()], [behind, in_front])
+    buildings, vegetation, _ = scene.buildings_and_vegetation([_building()], [behind, in_front])
 
     def crown_pixel(tree):
         point, properties = tree
@@ -133,30 +148,30 @@ def test_windows_follow_floors_and_wall_length(bounds, render_config):
     def panes(primitives):
         return [primitive for primitive in primitives if primitive.kind == "polygon"]
 
-    one_storey = panes(scene._windows((0, 0), (12, 0), 3.0, temple=False))
-    three_storeys = panes(scene._windows((0, 0), (12, 0), 9.0, temple=False))
+    one_storey = panes(scene._windows((0, 0), (12, 0), 3.0, skin="building"))
+    three_storeys = panes(scene._windows((0, 0), (12, 0), 9.0, skin="building"))
     per_floor = int((12 - facade.window_spacing_m / 2) // facade.window_spacing_m)
     assert len(one_storey) == per_floor
     assert len(three_storeys) == 3 * per_floor
-    assert scene._windows((0, 0), (1, 0), 9.0, temple=False) == []
-    assert scene._windows((0, 0), (12, 0), 1.5, temple=False) == []
+    assert scene._windows((0, 0), (1, 0), 9.0, skin="building") == []
+    assert scene._windows((0, 0), (12, 0), 1.5, skin="building") == []
 
 
 def test_gabled_roof_falls_back_for_irregular_footprints(bounds, render_config):
     scene = SceneRenderer(bounds, render_config)
-    hall = scene.gabled(box(10, 10, 30, 18), 10.0, temple=True)
+    hall = scene.gabled(box(10, 10, 30, 18), 10.0, skin="temple")
     assert hall is not None
     fills = {primitive.fill for primitive in hall}
     assert {"temple_trim"} <= fills
     assert fills & {"temple_roof", "temple_roof_dark"}
     l_shape = box(0, 0, 30, 6).union(box(0, 0, 6, 30))
-    assert scene.gabled(l_shape, 10.0, temple=True) is None
-    assert scene.gabled(box(0, 0, 20, 3), 10.0, temple=True) is None
+    assert scene.gabled(l_shape, 10.0, skin="temple") is None
+    assert scene.gabled(box(0, 0, 20, 3), 10.0, skin="temple") is None
 
 
 def test_window_panes_have_a_highlight(bounds, render_config):
     scene = SceneRenderer(bounds, render_config)
-    primitives = scene._windows((0, 0), (12, 0), 3.0, temple=False)
+    primitives = scene._windows((0, 0), (12, 0), 3.0, skin="building")
     lines = [primitive for primitive in primitives if primitive.kind == "line"]
     assert len(lines) == len(primitives) - len(lines)
     assert {line.outline for line in lines} == {"window_light"}
@@ -182,3 +197,61 @@ def test_landmark_forms_taper_to_a_point(bounds, render_config):
     prang_top = min(min(y for _, y in p.points) for p in scene.prang(footprint, 40.0) if p.points)
     apex = scene.projection.world_to_native(105, 55, 40.0)[1]
     assert abs(prang_top - apex) < 2
+
+
+def test_materials_are_deterministic_and_follow_building_size(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    groups = render_config.material_groups
+    small = box(0, 0, 10, 10)
+    big = box(0, 0, 40, 40)
+    assert (
+        scene.material(small, {"render_height_m": 5.0, "source_id": "way/9"}) in groups["lowrise"]
+    )
+    assert scene.material(big, {"render_height_m": 12.0, "source_id": "way/9"}) in groups["general"]
+    assert scene.material(big, {"render_height_m": 60.0, "source_id": "way/9"}) in groups["tower"]
+    first = scene.material(big, {"render_height_m": 12.0, "source_id": "way/42"})
+    assert first == scene.material(big, {"render_height_m": 12.0, "source_id": "way/42"})
+    picks = {
+        scene.material(big, {"render_height_m": 12.0, "source_id": f"way/{i}"}) for i in range(40)
+    }
+    assert len(picks) > 3
+
+
+def test_rooftop_items_sit_inside_the_roof_and_only_on_tall_buildings(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    roof = box(10, 10, 30, 30)
+    assert scene._rooftop_items(roof, 4.0, "way/1") == []
+    items = scene._rooftop_items(roof, 15.0, "way/1")
+    assert items
+    assert items == scene._rooftop_items(roof, 15.0, "way/1")
+    corners = [scene.projection.world_to_native(x, y, 15.0) for x in (10, 30) for y in (10, 30)]
+    xs = [x for primitive in items for x, _ in primitive.points]
+    assert min(xs) >= min(c[0] for c in corners) - 1
+    assert max(xs) <= max(c[0] for c in corners) + 1
+
+
+def test_metal_roofs_get_corrugation(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    footprint = box(10, 10, 20, 16)
+    metal = scene.prism(footprint, 5.0, "metal_rust", "way/3")
+    flat = scene.prism(footprint, 5.0, "concrete_grey", "way/3")
+    corrugation = [p for p in metal if p.kind == "line" and p.outline == "shade:metal_rust_roof"]
+    assert len(corrugation) >= 5
+    assert not [p for p in flat if p.outline == "shade:concrete_grey_roof"]
+
+
+def test_buildings_in_temple_grounds_are_drawn_traditionally(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    hall = box(20, 20, 40, 30)
+    plain = {
+        "render_height_m": 9.0,
+        "source_id": "way/77",
+        "is_temple": False,
+        "roof_shape": "flat",
+    }
+    outside = {p.fill for p in scene.building(hall, plain)}
+    scene.set_precincts([(box(10, 10, 50, 50), {"category": "religious"})])
+    inside = {p.fill for p in scene.building(hall, plain)}
+    assert "temple_trim" not in outside
+    assert {"temple_trim"} <= inside
+    assert inside & {"temple_roof", "temple_roof_dark"}

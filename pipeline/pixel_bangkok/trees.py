@@ -54,17 +54,18 @@ def place_canopy_trees(
     config: TreeConfig,
     seed: int,
 ) -> list[tuple[Point, float]]:
-    shapely.prepare(blocked)
-    placed: list[tuple[Point, float]] = []
-    for x, y in candidate_points(bounds, config.spacing_m, seed):
-        height = rasters.sample_point(canopy, "canopy_height", x, y, bounds)
-        if height == rasters.NODATA or height < config.min_canopy_height_m:
-            continue
-        point = Point(float(x), float(y))
-        if blocked.intersects(point):
-            continue
-        placed.append((point, round(height, 2)))
-    return placed
+    points = candidate_points(bounds, config.spacing_m, seed)
+    heights = rasters.sample_points(canopy, "canopy_height", points[:, 0], points[:, 1], bounds)
+    tall = (heights != rasters.NODATA) & (heights >= config.min_canopy_height_m)
+    points, heights = points[tall], heights[tall]
+    geometries = shapely.points(points)
+    if not blocked.is_empty:
+        shapely.prepare(blocked)
+        free = ~shapely.intersects(blocked, geometries)
+        geometries, heights = geometries[free], heights[free]
+    return [
+        (point, round(float(height), 2)) for point, height in zip(geometries, heights, strict=True)
+    ]
 
 
 def _blocked_area(processed_dir: Path, bounds: MapBounds) -> BaseGeometry:
@@ -82,8 +83,18 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
     bounds = MapBounds.from_area(area)
     osm = read_feature_collection(processed_dir / "trees.geojson")
     features: list[dict[str, Any]] = []
+    compact: list[tuple[float, float, float, float, str]] = []
     counts: Counter[str] = Counter()
     for geometry, properties in world_geometries(processed_dir / "trees.geojson", bounds):
+        compact.append(
+            (
+                geometry.x,
+                geometry.y,
+                config.default_height_m,
+                config.default_crown_radius_m,
+                properties["source_id"],
+            )
+        )
         features.append(
             feature(
                 geometry,
@@ -107,6 +118,9 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
         for index, (point, height) in enumerate(
             place_canopy_trees(canopy, bounds, blocked, config, render.seed)
         ):
+            compact.append(
+                (point.x, point.y, height, crown_radius(height, config), f"canopy/{index}")
+            )
             features.append(
                 feature(
                     point,
@@ -134,5 +148,36 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
     metadata["tree_counts"] = dict(sorted(counts.items()))
     output = processed_dir / "trees.enriched.geojson"
     write_feature_collection(output, features, metadata)
+    write_compact(processed_dir / COMPACT_NAME, compact)
     log.info("tree symbols: %s -> %s", dict(counts), output)
     return output
+
+
+COMPACT_NAME = "trees.render.npz"
+
+
+def write_compact(path: Path, trees: list[tuple[float, float, float, float, str]]) -> None:
+    """World-metre tree symbols with only what the renderer reads, so a city-scale render does
+    not hold millions of GeoJSON property dicts (trees.enriched.geojson stays the record)."""
+    columns = list(zip(*trees, strict=True)) if trees else [[], [], [], [], []]
+    np.savez_compressed(
+        path,
+        x=np.asarray(columns[0], dtype=np.float64),
+        y=np.asarray(columns[1], dtype=np.float64),
+        height_m=np.asarray(columns[2], dtype=np.float32),
+        crown_radius_m=np.asarray(columns[3], dtype=np.float32),
+        source_id=np.asarray(columns[4], dtype=str),
+    )
+
+
+def read_compact(path: Path) -> list[tuple[Any, dict[str, Any]]]:
+    import shapely
+
+    data = np.load(path)
+    points = shapely.points(data["x"], data["y"])
+    return [
+        (point, {"source_id": str(source), "height_m": float(h), "crown_radius_m": float(r)})
+        for point, source, h, r in zip(
+            points, data["source_id"], data["height_m"], data["crown_radius_m"], strict=True
+        )
+    ]

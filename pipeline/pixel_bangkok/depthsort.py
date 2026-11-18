@@ -58,10 +58,14 @@ def back_to_front(
     footprints: Sequence[Polygon],
     tie_breakers: Sequence[Hashable],
     raised: Sequence[float] | None = None,
+    soft: Sequence[bool] | None = None,
 ) -> list[int]:
     """Return indices of `footprints` in drawing order, furthest first.
 
     `raised[i]` is how far item i extends above its footprint on screen, in d units.
+    Two `soft` items (round symbols such as trees) get no constraint between them and fall
+    back to depth order; constraints to other items are kept. This keeps dense canopy from
+    producing millions of edges.
     """
     count = len(footprints)
     in_front: list[list[int]] = [[] for _ in range(count)]
@@ -71,19 +75,38 @@ def back_to_front(
     extents = shapely.bounds(np.array(footprints, dtype=object))
     lift = np.full(count, np.inf) if raised is None else np.asarray(raised, dtype=float)
     low_u, high_u = extents[:, 0], extents[:, 2]
-    low_v, high_v = extents[:, 1], extents[:, 3] + lift
+    low_d, high_d = extents[:, 1], extents[:, 3]
+    high_v = high_d + lift
+    is_soft = np.zeros(count, dtype=bool) if soft is None else np.asarray(soft, dtype=bool)
+    order_u = np.argsort(low_u, kind="stable")
+    sorted_low_u = low_u[order_u]
+
+    def link(behind: int, front: int) -> None:
+        in_front[behind].append(front)
+        blockers[front] += 1
+
     for i in range(count):
-        rest = np.arange(i + 1, count)
+        reach = np.searchsorted(sorted_low_u, high_u[i] - MIN_OVERLAP, side="right")
+        rest = order_u[:reach]
+        rest = rest[rest > i]
+        if is_soft[i]:
+            rest = rest[~is_soft[rest]]
         u_overlap = np.minimum(high_u[i], high_u[rest]) - np.maximum(low_u[i], low_u[rest])
-        v_overlap = np.minimum(high_v[i], high_v[rest]) - np.maximum(low_v[i], low_v[rest])
-        for j in rest[(u_overlap >= MIN_OVERLAP) & (v_overlap > 0)]:
+        v_overlap = np.minimum(high_v[i], high_v[rest]) - np.maximum(low_d[i], low_d[rest])
+        candidates = rest[(u_overlap >= MIN_OVERLAP) & (v_overlap > 0)]
+        clearly_behind = low_d[i] >= high_d[candidates] - TOLERANCE
+        clearly_front = low_d[candidates] >= high_d[i] - TOLERANCE
+        for j in candidates[clearly_behind]:
+            link(i, int(j))
+        for j in candidates[clearly_front & ~clearly_behind]:
+            link(int(j), i)
+        for j in candidates[~clearly_behind & ~clearly_front]:
             j = int(j)
             relation = _is_behind(footprints[i], footprints[j])
-            if relation == 0:
-                continue
-            behind, front = (i, j) if relation > 0 else (j, i)
-            in_front[behind].append(front)
-            blockers[front] += 1
+            if relation > 0:
+                link(i, j)
+            elif relation < 0:
+                link(j, i)
 
     def priority(index: int) -> tuple[float, Hashable, int]:
         return -footprints[index].centroid.y, tie_breakers[index], index

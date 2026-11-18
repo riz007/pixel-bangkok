@@ -76,6 +76,8 @@ def raw_osm(bounds: MapBounds) -> dict:
             way(21, [(0, 90), (200, 90)], {"waterway": "canal"}),
             way(22, [(0, 95), (200, 95)], {"waterway": "river"}),
             way(30, _square(150, 30, 20), {"leisure": "park"}),
+            way(31, _square(60, 60, 20), {"landuse": "religious"}),
+            way(32, _square(120, 5, 10), {"highway": "pedestrian", "area": "yes"}),
             {"type": "node", "id": 40, "lon": lon, "lat": lat, "tags": {"natural": "tree"}},
             {"type": "node", "id": 41, "lon": lon, "lat": lat, "tags": {"amenity": "bench"}},
         ]

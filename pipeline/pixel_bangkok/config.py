@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,8 @@ class SourceConfig:
     attribution: str
     attribution_url: str
     overpass_endpoints: tuple[str, ...]
+    method: str = "overpass"
+    extract_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,38 @@ class RoadStyleConfig:
 
 
 @dataclass(frozen=True)
+class TransitConfig:
+    layer_height_m: float
+    rail_min_elevation_m: float
+    road_min_elevation_m: float
+    ramp_grade: float
+    deck_thickness_m: float
+    pillar_size_m: float
+    pillar_spacing_m: float
+    segment_m: float
+    track_spacing_m: float
+    rail_gauge_m: float
+    ballast_width_m: float
+    sleeper_spacing_m: float
+    subway_dash_m: float
+    subway_gap_m: float
+
+
+DEFAULT_TRANSIT = TransitConfig(
+    5.0, 12.0, 10.0, 0.07, 1.6, 2.0, 30.0, 12.0, 4.5, 1.2, 3.0, 1.5, 4.0, 4.0
+)
+
+
+@dataclass(frozen=True)
+class RooftopConfig:
+    min_height_m: float
+    min_area_m2: float
+    tank_size_m: float
+    unit_size_m: float
+    max_items: float
+
+
+@dataclass(frozen=True)
 class RenderConfig:
     camera_azimuth_deg: float
     camera_elevation_deg: float
@@ -111,6 +145,11 @@ class RenderConfig:
     waterway_widths_m: dict[str, float]
     palette: dict[str, str]
     tiles: TileConfig
+    sidewalk_m: float = 0.0
+    rooftop: RooftopConfig = RooftopConfig(1e9, 1e9, 1.0, 1.0, 0)
+    materials: dict[str, dict[str, str]] = field(default_factory=dict)
+    material_groups: dict[str, list[str]] = field(default_factory=dict)
+    transit: TransitConfig = DEFAULT_TRANSIT
 
 
 @dataclass(frozen=True)
@@ -182,6 +221,15 @@ def _raster_source(data: dict[str, Any], key: str) -> RasterSourceConfig | None:
     )
 
 
+def _source_method(source: dict[str, Any]) -> str:
+    method = source.get("method", "overpass")
+    if method not in {"overpass", "pbf"}:
+        raise ConfigError("source.method must be 'overpass' or 'pbf'")
+    if method == "pbf" and not source.get("extract_url"):
+        raise ConfigError("source.extract_url is required when source.method is 'pbf'")
+    return method
+
+
 def parse_area_config(data: dict[str, Any]) -> AreaConfig:
     center = _require(data, "center", "area config")
     name = _require(data, "name", "area config")
@@ -213,10 +261,34 @@ def parse_area_config(data: dict[str, Any]) -> AreaConfig:
             attribution=str(_require(source, "attribution", "area source")),
             attribution_url=str(_require(source, "attribution_url", "area source")),
             overpass_endpoints=endpoints,
+            method=_source_method(source),
+            extract_url=source.get("extract_url"),
         ),
         building_heights=_raster_source(data, "building_heights"),
         tree_canopy=_raster_source(data, "tree_canopy"),
     )
+
+
+def _materials(data: dict[str, Any]) -> dict[str, dict[str, str]]:
+    materials = dict(_require(data, "materials", "render config"))
+    for name, colours in materials.items():
+        for part in ("wall_light", "wall_dark", "roof"):
+            if part not in colours:
+                raise ConfigError(f"materials.{name} is missing '{part}'")
+    return materials
+
+
+def _material_groups(data: dict[str, Any]) -> dict[str, list[str]]:
+    groups = dict(_require(data, "material_groups", "render config"))
+    materials = data["materials"]
+    for group in ("tower", "lowrise", "general"):
+        names = groups.get(group)
+        if not names:
+            raise ConfigError(f"material_groups.{group} must list at least one material")
+        unknown = [name for name in names if name not in materials]
+        if unknown:
+            raise ConfigError(f"material_groups.{group} names unknown materials: {unknown}")
+    return groups
 
 
 def parse_render_config(data: dict[str, Any]) -> RenderConfig:
@@ -260,6 +332,13 @@ def parse_render_config(data: dict[str, Any]) -> RenderConfig:
         road_widths_m=dict(_require(data, "road_widths_m", "render config")),
         waterway_widths_m=dict(_require(data, "waterway_widths_m", "render config")),
         palette=dict(_require(data, "palette", "render config")),
+        sidewalk_m=float(data.get("sidewalk_m", 0.0)),
+        rooftop=_floats(_require(data, "rooftop", "render config"), RooftopConfig, "rooftop"),
+        materials=_materials(data),
+        material_groups=_material_groups(data),
+        transit=_floats(data["transit"], TransitConfig, "transit")
+        if "transit" in data
+        else DEFAULT_TRANSIT,
         tiles=TileConfig(
             tile_size=tile_size,
             overlap=overlap,

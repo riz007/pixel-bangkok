@@ -60,3 +60,16 @@ def test_separated_items_fall_back_to_centroid_order():
     near = box(0, 0, 10, 10)
     far = box(0, 40, 10, 50)
     assert back_to_front([near, far], ["near", "far"], raised=[1.0, 1.0]) == [1, 0]
+
+
+def test_soft_items_keep_depth_order_and_constraints_to_hard_items():
+    from shapely.geometry import box
+
+    from pixel_bangkok.depthsort import back_to_front
+
+    footprints = [box(0, 10, 2, 12), box(0, 5, 2, 7), box(0, 0, 2, 2), box(0, 6, 3, 8)]
+    order = back_to_front(
+        footprints, ["a", "b", "c", "wall"], [3, 3, 3, 3], [True, True, True, False]
+    )
+    assert order.index(0) < order.index(1) < order.index(2)
+    assert order.index(0) < order.index(3) < order.index(2)

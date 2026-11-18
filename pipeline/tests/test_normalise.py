@@ -18,8 +18,10 @@ def test_layers_and_counts(result):
     assert {name: len(items) for name, items in layers.items()} == {
         "buildings": 5,
         "roads": 2,
+        "rail": 0,
         "water": 2,
         "green": 1,
+        "ground": 2,
         "trees": 1,
     }
     assert stats["skipped_duplicates"] == 1
@@ -60,3 +62,45 @@ def test_widths_record_provenance(result):
 
 def test_river_centre_lines_are_not_rendered_as_water(result):
     assert set(_by_id(result[0]["water"])) == {"way/20", "way/21"}
+
+
+def test_ground_categories(result):
+    ground = _by_id(result[0]["ground"])
+    assert ground["way/31"]["properties"]["category"] == "religious"
+    assert ground["way/32"]["properties"]["category"] == "paved"
+    assert "way/32" not in _by_id(result[0]["roads"])
+
+
+def test_chunks_tile_the_area_exactly(bounds):
+    from pixel_bangkok.extract import chunk_bounds
+
+    chunks = chunk_bounds(bounds, chunk_m=60)
+    assert len(chunks) == 4 * 2
+    assert (
+        sum(chunk.width_m * chunk.height_m for _, chunk in chunks)
+        == bounds.width_m * bounds.height_m
+    )
+    assert min(chunk.origin_easting for _, chunk in chunks) == bounds.origin_easting
+    assert (
+        max(chunk.origin_easting + chunk.width_m for _, chunk in chunks)
+        == bounds.origin_easting + bounds.width_m
+    )
+
+
+def test_chunk_payloads_merge_without_duplicates():
+    from pixel_bangkok.extract import merge_elements
+
+    first = {"elements": [{"type": "way", "id": 2}, {"type": "node", "id": 1}]}
+    second = {"elements": [{"type": "way", "id": 2}, {"type": "way", "id": 3}]}
+    assert [(e["type"], e["id"]) for e in merge_elements([first, second])] == [
+        ("node", 1),
+        ("way", 2),
+        ("way", 3),
+    ]
+
+
+def test_palace_grounds_are_ground():
+    from pixel_bangkok.normalise import _ground_category
+
+    assert _ground_category({"historic": "castle", "name": "Grand Palace"}) == "palace"
+    assert _ground_category({"historic": "memorial"}) is None

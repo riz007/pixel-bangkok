@@ -5,6 +5,9 @@ const CATEGORIES: Record<string, { label: string; glyph: string }> = {
   historic: { label: "Historic site", glyph: "◆" },
   market: { label: "Market", glyph: "●" },
   neighbourhood: { label: "Neighbourhood", glyph: "■" },
+  museum: { label: "Museum", glyph: "▤" },
+  transit: { label: "Station", glyph: "◎" },
+  park: { label: "Park", glyph: "♣" },
 };
 
 export function categoryInfo(category: string): { label: string; glyph: string } {

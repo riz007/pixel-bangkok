@@ -63,7 +63,17 @@ class TreeFeature(TypedDict):
     height_provenance: HeightProvenance
 
 
-POI_CATEGORIES = ("temple", "landmark", "pier", "historic", "market", "neighbourhood")
+POI_CATEGORIES = (
+    "temple",
+    "landmark",
+    "pier",
+    "historic",
+    "market",
+    "neighbourhood",
+    "museum",
+    "transit",
+    "park",
+)
 
 
 class SchemaError(ValueError):
@@ -83,6 +93,7 @@ class PointOfInterest:
     source: str | None = None
     source_url: str | None = None
     icon: str | None = None
+    rank: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PointOfInterest:
@@ -106,4 +117,5 @@ class PointOfInterest:
             source=data.get("source"),
             source_url=data.get("source_url"),
             icon=data.get("icon"),
+            rank=int(data["rank"]) if data.get("rank") is not None else None,
         )

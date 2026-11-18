@@ -39,3 +39,23 @@ def test_geographic_bbox_encloses_corners(bounds: MapBounds):
             assert south <= lat <= north
     assert bounds.contains_world(0, 0)
     assert not bounds.contains_world(-0.1, 0)
+
+
+def test_browser_transforms_match_pyproj(bounds):
+    transforms = bounds.browser_transforms()
+    forward = transforms["lonlat_to_world"]
+    inverse = transforms["world_to_lonlat"]
+    assert forward["max_error_m"] < 0.05 and inverse["max_error_m"] < 0.05
+    x, y = 37.0, 81.0
+    lon, lat = bounds.world_to_lonlat(x, y)
+
+    def evaluate(fit, keys, u, v):
+        terms = [1, u, v, u * u, u * v, v * v]
+        return [sum(c * t for c, t in zip(fit[key], terms, strict=True)) for key in keys]
+
+    fx, fy = evaluate(forward, ("x", "y"), lon - forward["origin"][0], lat - forward["origin"][1])
+    assert abs(fx - x) < 0.05 and abs(fy - y) < 0.05
+    flon, flat = evaluate(
+        inverse, ("lon", "lat"), x - inverse["origin"][0], y - inverse["origin"][1]
+    )
+    assert abs(flon - lon) < 1e-6 and abs(flat - lat) < 1e-6

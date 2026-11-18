@@ -1,13 +1,16 @@
 # Pixel Bangkok
 
 An interactive isometric pixel-art map of Bangkok generated from open geographic data:
-OpenStreetMap for roads, water and building footprints, Google Open Buildings 2.5D for building
-heights, and the Meta/WRI canopy-height map for trees.
-The current build covers one proof-of-concept area: a 500 m × 500 m square around
-Wat Arun and the Chao Phraya riverside.
+OpenStreetMap for roads, water, land use and building footprints, Google Open Buildings 2.5D for
+building heights, the Meta/WRI canopy-height map for trees, and Wikidata for landmark descriptions.
 
-- `SPEC.md` — product and architecture specification
-- `AGENTS.md` — engineering rules
+Published areas:
+
+| Area | Size | Contents |
+|---|---|---|
+| `inner-bangkok` | 10 km × 10 km | Old town, Chinatown, Silom/Sathorn, Siam, Pratunam, Victory Monument, Sukhumvit to Asok, Thonburi riverside |
+| `old-town` | 3 km × 3 km | Rattanakosin Island and the Thonburi bank |
+| `wat-arun` | 500 m × 500 m | The original proof-of-concept area |
 
 ## Layout
 
@@ -37,12 +40,14 @@ Each stage also runs on its own, for example `pnpm pipeline render --area wat-ar
 
 | Stage | Reads | Writes |
 |---|---|---|
-| `extract` | Overpass API, height and canopy rasters | `data/raw/<id>/osm.json`, `building_heights.tif`, `tree_canopy.tif`, `extract-metadata.json` (each skipped if present; `--force` re-downloads) |
+| `extract` | Overpass API or a regional PBF extract, height and canopy rasters | `data/raw/<id>/osm.json`, `building_heights.tif`, `tree_canopy.tif`, `extract-metadata.json` (each skipped if present; `--force` re-downloads) |
 | `normalise` | raw extract | `data/processed/<id>/*.geojson`, `metadata.json` |
 | `enrich` | buildings, rasters, `landmarks.json` | `buildings.enriched.geojson` with height provenance, `trees.enriched.geojson` |
+| `pois` | `poi-candidates.json`, Wikidata API | `data/processed/<id>/pois.json` (top landmarks by Wikipedia coverage) |
+| `motion` | raw OSM | `data/processed/<id>/motion.json`: drivable roads, river/canal centrelines, ferry routes |
 | `render` | processed layers | `build/<id>/render.png` and `layers/*.png` (geometry reference) |
-| `style` | `render.png` | `build/<id>/master.png` |
-| `tile` | `master.png` | `build/<id>/tiles/`, `manifest.json` |
+| `style` | `render.png`, render layers | `build/<id>/master.png`, `overlay.png` (buildings and trees only) |
+| `tile` | `master.png`, `overlay.png` | `build/<id>/tiles/`, `overlay/`, `manifest.json` |
 | `publish` | tiles, manifest, `pois.json` | `apps/web/public/maps/<id>/`, `maps/index.json` |
 
 The render is deterministic: the same raw extract and configuration produce a byte-identical
@@ -74,7 +79,31 @@ pnpm test:e2e         # Playwright; needs `pnpm pipeline all`, `pnpm build` and
 
 `pipeline/pixel_bangkok/crs.py` and `projection.py` are the only places the geographic and
 isometric transforms are defined. The published manifest carries the world→image matrix, and
-published POIs carry image pixels computed with it.
+published POIs carry image pixels computed with it. For lat, long search and the Report link,
+`publish` adds quadratic lon/lat↔world fits (`projection.geographic`) with their worst error on a
+grid over the area (about 1 cm for 20 km).
+
+## Transit
+
+Rail ways and transit route relations come from OSM. Lines underground (MRT Blue) are drawn as a
+dashed trace, at-grade rail as ballast and rails, and BTS, elevated metro and expressways as
+viaducts on pillars. OSM has no deck heights: they are estimated from the `layer` tag and marked
+`elevation_provenance: "estimated-layer"` in `rail.geojson` and `roads.geojson`. Re-rendering
+re-queues any AI window whose procedural input changed.
+
+## OSM source per area
+
+`source.method` in `config/areas/<id>.json` is `overpass` (default, fine for small areas) or `pbf`,
+which downloads a regional extract once (Geofabrik Thailand, ~330 MB, MD5-checked) into
+`data/raw/_cache/pbf/` and selects the area locally with pyosmium using the same tag rules. Use
+`pbf` for anything larger than about 1 km²; public Overpass servers often time out.
+
+## Landmarks
+
+Curated POIs in `data/curated/<id>/pois.json` are combined with generated ones from the `pois`
+stage. Generated POIs are named OSM features with a Wikidata ID; names come from OSM or Wikidata and
+descriptions from Wikidata, never written by hand. Curated entries win, and a generated POI within
+25 m of a curated one of the same category is dropped.
 
 ## Building heights
 
@@ -89,7 +118,73 @@ Trees are symbols placed on a fixed-seed jittered grid wherever the canopy model
 least 3 m tall; they are not individually surveyed trees. Gabled temple roofs, façade windows,
 roof tiles and dither textures are drawn for illustration. Buildings OSM tags as pagodas or stupas are
 drawn as bell-shaped chedis, and Wat Arun's central and satellite prangs (curated) as tiered prangs;
-these forms are stylised and sit inside each building's real footprint.
+these forms are stylised and sit inside each building's real footprint. Buildings inside temple or
+palace grounds are drawn in traditional style; other buildings get a material (concrete, pastel
+shophouse, corrugated metal, glass) chosen deterministically from their OSM ID and size, and flat roofs
+over 8 m get decorative water tanks and AC units. None of these details are source data.
+
+## Large areas
+
+Rendering, styling and tiling work in 4096 px blocks (`build/<id>/blocks/`), so area size is limited by
+disk and time, not memory. Block output is pixel-identical to a whole-image render, and the tile pyramid
+is streamed from blocks with 2×2 mode pooling. Inner Bangkok is about 42,000 × 21,000 px.
+
+## AI illustration (optional, slow)
+
+An optional AI pass repaints the procedural map with Qwen-Image 2.1 Turbo running locally through
+[mflux](https://github.com/filipstrand/mflux). The model is under the Qwen Research License: personal,
+non-commercial use only. The procedural map stays the geometry reference and the fallback.
+
+```bash
+uv tool install mflux                                     # once; the model downloads on first use (~17 GB)
+pnpm pipeline ai-plan --area inner-bangkok --focus 100.4913,13.7500
+pnpm pipeline ai-run --area inner-bangkok --limit 200     # resumable; ~70 s per window on an M5
+pnpm pipeline ai-compose --area inner-bangkok
+pnpm pipeline tile --area inner-bangkok && pnpm pipeline publish --area inner-bangkok
+```
+
+Windows are 1024 px with 256 px overlap, processed outward from the focus point, snapped to a 64-colour
+palette, aligned for small uniform offsets and checked against the procedural render. A window is
+rejected if any confidently matched 128 px block moved more than 2 px, fewer than 90% of edges survive,
+or more than 30% of textured blocks no longer match; rejected windows are retried once at lower strength
+and otherwise stay procedural. Accepted windows are feather-blended. The viewer shows the AI layer by
+default where it exists, with an "AI" button to switch to the plain drawing.
+
+## Animation
+
+Cars, taxis, tuk-tuks, buses, motorbikes and boats move along OSM roads, the Chao Phraya, canals
+and ferry routes, keeping left as in Thailand and respecting one-way streets. Vehicles are drawn
+between the map and an overlay of the same map's buildings and trees, so they pass behind buildings.
+Trains run on rail and viaduct paths in their OSM line colour (BTS green, Silom teal, and so on), at
+the estimated deck height. Elevated trains draw on a second canvas, below a `front/` overlay holding
+only the buildings and trees the renderer drew in front of a viaduct, so towers still hide them.
+Elevated expressways have no traffic yet. Underground lines show no trains.
+The animation is illustrative: vehicle counts and positions are not traffic data. It starts paused
+when the system asks for reduced motion and has a play/pause control; it is hidden when zoomed far out.
+
+## Image quality
+
+Pyramid levels are made by taking the most common colour of each 2×2 block, so every level keeps the
+original pixel-art colours instead of averaging them. The viewer draws with smoothing off, prefers
+full-resolution levels (`minPixelRatio` 1) and caches up to 1,500 tiles.
+
+## Deploying
+
+The web app and the map files are deployed separately; tile sets are too large for most page hosts.
+
+1. Generate and publish the areas you want (`pnpm pipeline all --area <id>`, plus the AI steps if
+   wanted). Published files are in `apps/web/public/maps/`.
+2. Upload `apps/web/public/maps/` to object storage with public read access (for example a Cloudflare
+   R2 bucket with a custom domain). Keep the folder structure and serve `.webp` as `image/webp`.
+   The viewer adds a content version (`?v=`) to every tile and thumbnail URL, so tiles, overlays,
+   `places/` and `motion.json` can be cached forever (`Cache-Control: public, max-age=31536000,
+   immutable`). Give `index.json`, `manifest.json` and `pois.json` a short cache (e.g. 5 minutes),
+   since they point at the current version.
+3. Deploy `apps/web` to a Next.js host (for example Vercel) with:
+   - `NEXT_PUBLIC_MAP_ASSETS_URL` = the public URL of the uploaded `maps/` folder
+   - `NEXT_PUBLIC_MAKER_NAME` = the name to credit in the About dialog
+4. Open the site, check the About dialog credits, and share a deep link such as
+   `/?area=inner-bangkok&place=wat-arun`.
 
 ## Attribution
 

@@ -69,6 +69,10 @@ class RasterSample:
     label: str
 
 
+MAX_PLAUSIBLE_HEIGHT_M = 830.0
+MAX_PLAUSIBLE_LEVELS = 163
+
+
 def derive_height(
     source_height: str | None,
     source_levels: str | None,
@@ -78,10 +82,23 @@ def derive_height(
 ) -> DerivedHeight:
     if manual is not None and "height_m" in manual:
         return DerivedHeight(float(manual["height_m"]), "manual", "curated", manual.get("note"))
+    rejected = []
     height = parse_height_m(source_height)
+    if height is not None and height > MAX_PLAUSIBLE_HEIGHT_M:
+        rejected.append(f"implausible OSM height {source_height!r} ignored")
+        height = None
     if height is not None:
         return DerivedHeight(height, "source", "osm-height")
     levels = parse_levels(source_levels)
+    if levels is not None and levels > MAX_PLAUSIBLE_LEVELS:
+        rejected.append(f"implausible OSM building:levels {source_levels!r} ignored")
+        levels = None
+    if rejected:
+        fallback = derive_height(None, None, config, None, raster)
+        note = "; ".join([*rejected, fallback.note or ""]).rstrip("; ")
+        return DerivedHeight(
+            fallback.render_height_m, fallback.provenance, fallback.height_source, note
+        )
     if levels is not None:
         return DerivedHeight(
             levels * config.floor_height_m,

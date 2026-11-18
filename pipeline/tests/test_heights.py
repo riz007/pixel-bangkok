@@ -134,3 +134,12 @@ def test_roof_shapes():
     assert roof_shape({"is_tower": False, "category": "temple"}, None) == "gabled"
     assert roof_shape({"is_tower": False, "category": "yes"}, None) == "flat"
     assert roof_shape({"is_tower": False, "category": "yes"}, {"roof_shape": "spire"}) == "spire"
+
+
+def test_implausible_osm_values_fall_back_with_a_note(render_config):
+    from pixel_bangkok.heights import derive_height
+
+    derived = derive_height(None, "12345678910111212", render_config.heights)
+    assert derived.render_height_m == render_config.heights.unknown_height_m
+    assert "implausible" in derived.note
+    assert derive_height("9000 m", None, render_config.heights).height_source != "osm-height"

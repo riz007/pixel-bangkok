@@ -127,3 +127,51 @@ def test_resampling_reprojects_a_geographic_source_onto_the_grid(tmp_path, bound
     assert sample_point(layer, "canopy_height", -5, 50, bounds) == NODATA
     values = footprint_values(layer, "canopy_height", box(190, 40, 195, 45), bounds)
     assert values.size == 25 and set(values.tolist()) == {3.0}
+
+
+def test_chunked_uint8_storage_round_trips(tmp_path, bounds, monkeypatch):
+    import pixel_bangkok.rasters as rasters
+
+    south, west, north, east = bounds.geographic_bbox(buffer_m=50)
+    resolution = 0.00001
+    width = int((east - west) / resolution) + 1
+    height = int((north - south) / resolution) + 1
+    data = np.full((2, height, width), 12.3, dtype=np.float32)
+    data[0, :, : width // 2] = 40.6
+    data[1] = 0.73
+    source_path = tmp_path / "heights.tif"
+    with rasterio.open(
+        source_path,
+        "w",
+        driver="GTiff",
+        width=width,
+        height=height,
+        count=2,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(west, north, resolution, resolution),
+    ) as output:
+        output.write(data)
+
+    monkeypatch.setattr(rasters, "CHUNK_PX", 64)
+    grid = AreaGrid.for_bounds(bounds, 1.0)
+    out = tmp_path / "compact.tif"
+    covered = rasters.fetch_onto_grid(
+        [str(source_path)],
+        [1, 2],
+        grid,
+        None,
+        out,
+        ["building_height", "building_presence"],
+        rasters.HEIGHT_SCALES,
+    )
+    assert covered == 1.0
+    with rasterio.open(out) as stored:
+        assert stored.dtypes[0] == "uint8"
+    layer = read_layer(out)
+    assert layer.scales == rasters.HEIGHT_SCALES
+    assert sample_point(layer, "building_height", 5, 50, bounds) == 40.5
+    assert sample_point(layer, "building_height", 195, 50, bounds) == 12.5
+    assert abs(sample_point(layer, "building_presence", 5, 50, bounds) - 0.73) < 0.005
+    values = footprint_values(layer, "building_height", box(190, 40, 195, 45), bounds)
+    assert set(values.tolist()) == {12.5}
