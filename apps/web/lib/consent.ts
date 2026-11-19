@@ -4,7 +4,39 @@ let reopened = false;
 
 export type ConsentChoice = "granted" | "denied";
 
-export const ANALYTICS_ENABLED = /^GTM-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GTM_ID ?? "");
+/** Google Analytics 4 Measurement ID (G-…): loaded directly, and only after consent. */
+export const GA_ID = /^G-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GA_ID ?? "")
+  ? (process.env.NEXT_PUBLIC_GA_ID as string)
+  : null;
+/** Optional Google Tag Manager container (GTM-…), for sites that manage tags there instead. */
+export const GTM_ID = /^GTM-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GTM_ID ?? "")
+  ? (process.env.NEXT_PUBLIC_GTM_ID as string)
+  : null;
+export const ANALYTICS_ENABLED = GA_ID !== null || GTM_ID !== null;
+
+type Gtag = (...args: unknown[]) => void;
+let analyticsLoaded = false;
+
+/** Load gtag.js for GA4. Called only once the visitor has allowed analytics. */
+export function loadGoogleAnalytics(): void {
+  if (!GA_ID || analyticsLoaded) return;
+  analyticsLoaded = true;
+  const scope = window as unknown as { dataLayer?: unknown[]; gtag?: Gtag };
+  scope.dataLayer = scope.dataLayer ?? [];
+  scope.gtag =
+    scope.gtag ??
+    function gtag() {
+      // gtag.js expects the arguments object itself, not an array.
+      // eslint-disable-next-line prefer-rest-params
+      scope.dataLayer?.push(arguments);
+    };
+  scope.gtag("js", new Date());
+  scope.gtag("config", GA_ID);
+  const script = document.createElement("script");
+  script.async = true;
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
+  document.head.appendChild(script);
+}
 
 export function readConsent(): ConsentChoice | null {
   try {
@@ -22,8 +54,9 @@ export function saveConsent(choice: ConsentChoice): void {
   } catch {
     // Storage can be blocked; the choice then lasts for this page view only.
   }
-  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+  const gtag = (window as unknown as { gtag?: Gtag }).gtag;
   gtag?.("consent", "update", { analytics_storage: choice });
+  if (choice === "granted") loadGoogleAnalytics();
   reopened = false;
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }

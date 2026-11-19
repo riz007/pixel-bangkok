@@ -88,7 +88,7 @@ const en = {
   privacyWho: (maker: string | null, hasContact: boolean) =>
     `Pixel Bangkok${maker ? `, run by ${maker},` : ""} is responsible for the personal data described here (the data controller under Thailand's Personal Data Protection Act).${hasContact ? " Contact:" : ""}`,
   privacyAnalytics:
-    "Analytics (only if you choose Allow): Google Analytics, loaded through Google Tag Manager, sets cookies to count visits and see which places and features are used, along with your device type, browser and approximate location. It is kept for up to 14 months. The legal basis is your consent, which you can withdraw at any time in Privacy settings.",
+    "Analytics (only if you choose Allow): Google Analytics is loaded only after you allow it and sets cookies to count visits and see which places and features are used, along with your device type, browser and approximate location. It is kept for up to 14 months. The legal basis is your consent, which you can withdraw at any time in Privacy settings.",
   privacyHosting:
     "Hosting: to deliver the site and keep it secure, Vercel and Cloudflare process your IP address and request details in short-lived server logs. The legal basis is our legitimate interest in running the site.",
   privacyNone:
@@ -117,7 +117,7 @@ const en = {
     ],
     [
       "Is it free to use?",
-      "Yes. It is free and needs no account. Visits are measured with Google Tag Manager. Map data is © OpenStreetMap contributors under the ODbL.",
+      "Yes. It is free and needs no account. If you allow it, visits are measured with Google Analytics. Map data is © OpenStreetMap contributors under the ODbL.",
     ],
   ] as [string, string][],
 };
@@ -209,7 +209,7 @@ const th: Strings = {
   privacyWho: (maker: string | null, hasContact: boolean) =>
     `Pixel Bangkok${maker ? ` ซึ่งดำเนินการโดย ${maker}` : ""} เป็นผู้ควบคุมข้อมูลส่วนบุคคลที่ระบุไว้ในประกาศนี้ ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562${hasContact ? " ติดต่อ:" : ""}`,
   privacyAnalytics:
-    "การวิเคราะห์การใช้งาน (เฉพาะเมื่อคุณกดอนุญาต): Google Analytics ซึ่งโหลดผ่าน Google Tag Manager จะตั้งคุกกี้เพื่อนับการเข้าชมและดูว่ามีการใช้สถานที่และฟีเจอร์ใดบ้าง รวมถึงประเภทอุปกรณ์ เบราว์เซอร์ และตำแหน่งโดยประมาณ ข้อมูลจะเก็บไว้ไม่เกิน 14 เดือน ฐานทางกฎหมายคือความยินยอมของคุณ ซึ่งถอนได้ทุกเมื่อในตั้งค่าความเป็นส่วนตัว",
+    "การวิเคราะห์การใช้งาน (เฉพาะเมื่อคุณกดอนุญาต): Google Analytics จะโหลดหลังจากคุณอนุญาตเท่านั้น และจะตั้งคุกกี้เพื่อนับการเข้าชมและดูว่ามีการใช้สถานที่และฟีเจอร์ใดบ้าง รวมถึงประเภทอุปกรณ์ เบราว์เซอร์ และตำแหน่งโดยประมาณ ข้อมูลจะเก็บไว้ไม่เกิน 14 เดือน ฐานทางกฎหมายคือความยินยอมของคุณ ซึ่งถอนได้ทุกเมื่อในตั้งค่าความเป็นส่วนตัว",
   privacyHosting:
     "การให้บริการเว็บไซต์: Vercel และ Cloudflare ประมวลผลที่อยู่ IP และรายละเอียดการเข้าใช้งานในบันทึกของเซิร์ฟเวอร์ที่เก็บไว้ช่วงสั้น ๆ เพื่อให้บริการเว็บไซต์และรักษาความปลอดภัย ฐานทางกฎหมายคือประโยชน์โดยชอบด้วยกฎหมายในการดำเนินงานเว็บไซต์",
   privacyNone:
@@ -238,7 +238,7 @@ const th: Strings = {
     ],
     [
       "ใช้ฟรีไหม",
-      "ใช้ฟรีและไม่ต้องสมัครสมาชิก มีการวัดสถิติการเข้าชมด้วย Google Tag Manager ข้อมูลแผนที่ © ผู้ร่วมพัฒนา OpenStreetMap ภายใต้สัญญาอนุญาต ODbL",
+      "ใช้ฟรีและไม่ต้องสมัครสมาชิก หากคุณอนุญาต จะมีการวัดสถิติการเข้าชมด้วย Google Analytics ข้อมูลแผนที่ © ผู้ร่วมพัฒนา OpenStreetMap ภายใต้สัญญาอนุญาต ODbL",
     ],
   ],
 };

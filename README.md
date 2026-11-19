@@ -70,7 +70,8 @@ for a web host (about 1.4 GB).
    - `NEXT_PUBLIC_MAP_ASSETS_URL`: your bucket's address
    - `NEXT_PUBLIC_MAKER_NAME`: your name, shown in About
    - `NEXT_PUBLIC_REPO_URL`: this repository, linked in About (optional)
-   - `NEXT_PUBLIC_GTM_ID`: your Google Tag Manager container, e.g. `GTM-XXXXXXX` (optional)
+   - `NEXT_PUBLIC_GA_ID`: your Google Analytics 4 Measurement ID, e.g. `G-XXXXXXXXXX` (optional;
+     loaded only after visitors allow analytics)
    - `NEXT_PUBLIC_CONTACT_EMAIL`: contact shown in the privacy notice, e.g. `hello@example.com`
 3. Submit `/sitemap.xml` in Google Search Console.
 

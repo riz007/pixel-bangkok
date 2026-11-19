@@ -3,7 +3,8 @@ import { Bai_Jamjuree, Chonburi } from "next/font/google";
 import Script from "next/script";
 import type { ReactNode } from "react";
 
-import { CONSENT_KEY } from "@/lib/consent";
+import { AnalyticsLoader } from "@/features/map/AnalyticsLoader";
+import { ANALYTICS_ENABLED, CONSENT_KEY, GTM_ID } from "@/lib/consent";
 import { STRINGS } from "@/lib/i18n";
 import {
   DESCRIPTION,
@@ -35,9 +36,6 @@ const body = Bai_Jamjuree({
   display: "swap",
 });
 
-const GTM_ID = /^GTM-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GTM_ID ?? "")
-  ? process.env.NEXT_PUBLIC_GTM_ID
-  : null;
 
 const OG_ALT = "Isometric pixel-art map of central Bangkok with the Chao Phraya river";
 
@@ -86,11 +84,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="th" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
       <body>
-        {GTM_ID && (
+        {ANALYTICS_ENABLED && (
           <>
             <Script id="consent-defaults" strategy="beforeInteractive">
               {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=gtag;gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',wait_for_update:500});try{if(localStorage.getItem('${CONSENT_KEY}')==='granted'){gtag('consent','update',{analytics_storage:'granted'});}}catch(e){}`}
             </Script>
+            <AnalyticsLoader />
+          </>
+        )}
+        {GTM_ID && (
+          <>
             <Script id="google-tag-manager" strategy="afterInteractive">
               {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${GTM_ID}');`}
             </Script>
