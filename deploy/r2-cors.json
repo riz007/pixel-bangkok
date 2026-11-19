@@ -1,6 +1,11 @@
 [
   {
-    "AllowedOrigins": ["https://YOUR-SITE.vercel.app", "http://localhost:3000"],
+    "AllowedOrigins": [
+      "https://pixelbangkok.com",
+      "https://www.pixelbangkok.com",
+      "https://pixel-bangkok.vercel.app",
+      "http://localhost:3000"
+    ],
     "AllowedMethods": ["GET", "HEAD"],
     "AllowedHeaders": ["*"],
     "MaxAgeSeconds": 86400
