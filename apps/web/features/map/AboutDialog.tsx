@@ -61,6 +61,16 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
         ))}
       </dl>
 
+      <h3>{text.faqTitle}</h3>
+      <div className="about__faq">
+        {text.faq.map(([question, answer]) => (
+          <details key={question}>
+            <summary>{question}</summary>
+            <p>{answer}</p>
+          </details>
+        ))}
+      </div>
+
       <h3>{text.dataTitle}</h3>
       <ul className="about__credits">
         {manifest.attributions.map((attribution) => (

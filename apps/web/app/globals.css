@@ -3,6 +3,7 @@
   --lacquer-raised: #2a1f1b;
   --lacquer-edge: #4a3729;
   --gold: #d4a53a;
+  --marigold: #f6c23e;
   --gold-dim: #9c7a2c;
   --sign: #1f4e8c;
   --sign-deep: #173c6c;
@@ -634,8 +635,28 @@ kbd {
 }
 
 .plate[aria-current="true"] {
-  box-shadow: 0 0 0 3px var(--gold), var(--shadow);
-  transform: translateY(-4px);
+  background: var(--marigold);
+  box-shadow:
+    0 0 0 3px var(--marigold),
+    0 0 0 5px var(--lacquer),
+    0 0 18px 4px color-mix(in srgb, var(--marigold) 55%, transparent),
+    var(--shadow);
+  transform: translateY(-6px);
+}
+
+.plate[aria-current="true"] .plate__sign {
+  background: var(--marigold);
+  box-shadow: inset 0 0 0 1.5px var(--lacquer);
+  color: var(--lacquer);
+}
+
+.plate[aria-current="true"] .plate__secondary {
+  color: #4a3417;
+}
+
+.plate[aria-current="true"] .plate__number {
+  background: var(--lacquer);
+  color: var(--marigold);
 }
 
 .plate:hover .plate__sign {
@@ -1089,4 +1110,24 @@ kbd {
   .map__compass {
     display: none;
   }
+}
+
+.about__faq details {
+  border-top: 1px solid var(--lacquer-edge);
+  padding: 8px 0;
+}
+
+.about__faq summary {
+  cursor: pointer;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.about__faq summary:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.about__faq p {
+  margin: 6px 0 0;
 }

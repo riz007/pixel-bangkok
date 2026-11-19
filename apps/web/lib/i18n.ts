@@ -76,6 +76,29 @@ const en = {
   aiOffLabel: "Show AI art",
   trafficOnLabel: "Pause traffic and boats",
   trafficOffLabel: "Play traffic and boats",
+  faqTitle: "Questions",
+  faq: [
+    [
+      "What is Pixel Bangkok?",
+      "An interactive isometric pixel-art map of Bangkok you can pan, zoom and search, with temples, canals, markets, the Chao Phraya, the BTS and MRT, in Thai and English.",
+    ],
+    [
+      "Is the map geographically accurate?",
+      "Yes. Every building, road, canal, railway and tree is placed from OpenStreetMap and drawn with one fixed isometric projection, so places keep their real positions and distances. Building heights come from Google Open Buildings or OpenStreetMap; where none is known, a default height is used and recorded.",
+    ],
+    [
+      "Which parts of Bangkok does it cover?",
+      "A 20 by 20 km map of central Bangkok from Chatuchak to Sathon and both banks of the river, plus detailed maps of Inner Bangkok, the old town of Rattanakosin and Wat Arun.",
+    ],
+    [
+      "Is AI used?",
+      "Optionally. Parts of the map can be shown repainted by an open image model for a hand-drawn look; every AI tile is checked against the plain drawing and discarded if anything moved. The plain drawing is always one click away.",
+    ],
+    [
+      "Is it free to use?",
+      "Yes. It is free, needs no account and collects no personal data. Map data is © OpenStreetMap contributors under the ODbL.",
+    ],
+  ] as [string, string][],
 };
 
 type Strings = typeof en;
@@ -153,6 +176,29 @@ const th: Strings = {
   aiOffLabel: "ดูภาพ AI",
   trafficOnLabel: "หยุดรถและเรือ",
   trafficOffLabel: "เล่นรถและเรือ",
+  faqTitle: "คำถามที่พบบ่อย",
+  faq: [
+    [
+      "Pixel Bangkok คืออะไร",
+      "แผนที่กรุงเทพฯ แบบไอโซเมตริกพิกเซลอาร์ตที่เลื่อน ซูม และค้นหาได้ ทั้งวัด คลอง ตลาด แม่น้ำเจ้าพระยา รถไฟฟ้า BTS และ MRT รองรับภาษาไทยและอังกฤษ",
+    ],
+    [
+      "แผนที่ถูกต้องตามจริงไหม",
+      "ถูกต้องตามตำแหน่งจริง อาคาร ถนน คลอง ทางรถไฟ และต้นไม้ทุกแห่งวางจากข้อมูล OpenStreetMap และวาดด้วยมุมมองไอโซเมตริกเดียวกันทั้งหมด ความสูงอาคารมาจาก Google Open Buildings หรือ OpenStreetMap หากไม่มีข้อมูลจะใช้ความสูงมาตรฐานและบันทึกไว้",
+    ],
+    [
+      "ครอบคลุมพื้นที่ไหนบ้าง",
+      "แผนที่ใจกลางกรุงเทพฯ ขนาด 20 x 20 กม. ตั้งแต่จตุจักรถึงสาทรและสองฝั่งแม่น้ำ พร้อมแผนที่ละเอียดของกรุงเทพฯ ชั้นใน เกาะรัตนโกสินทร์ และวัดอรุณ",
+    ],
+    [
+      "ใช้ AI หรือเปล่า",
+      "ใช้เป็นตัวเลือก บางส่วนของแผนที่แสดงภาพที่วาดใหม่ด้วยโมเดลสร้างภาพแบบเปิด ทุกภาพถูกตรวจเทียบกับภาพวาดต้นฉบับและตัดทิ้งหากตำแหน่งเคลื่อน กดปิดภาพ AI ได้ทุกเมื่อ",
+    ],
+    [
+      "ใช้ฟรีไหม",
+      "ใช้ฟรี ไม่ต้องสมัครสมาชิก และไม่เก็บข้อมูลส่วนตัว ข้อมูลแผนที่ © ผู้ร่วมพัฒนา OpenStreetMap ภายใต้สัญญาอนุญาต ODbL",
+    ],
+  ],
 };
 
 export const STRINGS: Record<Lang, Strings> = { th, en };

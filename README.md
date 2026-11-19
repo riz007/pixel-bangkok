@@ -194,10 +194,12 @@ is gitignored, so a Vercel build from Git never includes it.
 1. Import the GitHub repository and set **Root Directory** to `apps/web` (framework: Next.js,
    package manager: pnpm).
 2. Environment variables:
+   - `NEXT_PUBLIC_SITE_URL` = the site's public URL, e.g. `https://pixelbangkok.com` (canonical
+     links, `sitemap.xml`, `robots.txt`, `llms.txt` and social cards use it)
    - `NEXT_PUBLIC_MAP_ASSETS_URL` = the bucket's public URL, e.g. `https://maps.example.com`
    - `NEXT_PUBLIC_MAKER_NAME` = the name credited in the About dialog
    - `NEXT_PUBLIC_REPO_URL` = the source repository linked in the About dialog (optional)
-3. Deploy, then check: the map loads, the About dialog credits are complete, a deep link such as
+3. Deploy, then submit `https://<site>/sitemap.xml` in Google Search Console and check: the map loads, the About dialog credits are complete, a deep link such as
    `/?area=bangkok&place=wat-arun` opens the place, and the browser console shows no CORS errors.
 
 When a map is regenerated, upload it first and only then redeploy (or not at all: the site reads
