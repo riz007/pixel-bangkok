@@ -514,7 +514,7 @@ kbd {
 /* ---------- Places rail ---------- */
 
 .app[data-rail="open"] {
-  --rail-height: 172px;
+  --rail-height: 186px;
 }
 
 .rail {
@@ -525,7 +525,7 @@ kbd {
   align-items: center;
   gap: 6px;
   height: var(--rail-height);
-  padding: 10px 10px 14px;
+  padding: 0 10px 8px;
   background: linear-gradient(to top, rgb(28 20 18 / 92%), rgb(28 20 18 / 0%));
 }
 
@@ -534,7 +534,10 @@ kbd {
   display: flex;
   gap: 10px;
   margin: 0;
-  padding: 4px 2px;
+  /* Room inside the scroller for the selected card's lift, ring and glow, which a horizontal
+     scroller would otherwise clip. */
+  padding: 20px 12px 10px;
+  scroll-padding-inline: 12px;
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
@@ -1003,7 +1006,7 @@ kbd {
   }
 
   .app[data-rail="open"] {
-    --rail-height: 150px;
+    --rail-height: 164px;
   }
 
   .plate {
@@ -1066,8 +1069,9 @@ kbd {
 }
 
 @media (max-width: 760px) {
+  /* OpenSeadragon sets an inline display on the navigator element. */
   .map__navigator {
-    display: none;
+    display: none !important;
   }
 }
 
@@ -1130,4 +1134,100 @@ kbd {
 
 .about__faq p {
   margin: 6px 0 0;
+}
+
+.consent {
+  position: absolute;
+  left: 12px;
+  bottom: calc(var(--rail-height, 0px) + 12px);
+  z-index: 6;
+  width: min(360px, calc(100% - 24px));
+  padding: 14px 16px 12px;
+  border-radius: var(--radius-plate);
+  background: var(--lacquer);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-dim),
+    inset 0 0 0 4px var(--lacquer),
+    inset 0 0 0 5px color-mix(in srgb, var(--gold) 45%, transparent),
+    var(--shadow);
+  color: var(--paper);
+}
+
+.consent__title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: var(--gold);
+}
+
+.consent__text {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.consent__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.consent__actions button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.consent__decline {
+  border: 1px solid var(--gold-dim);
+  background: transparent;
+  color: var(--paper);
+}
+
+.consent__decline:hover {
+  background: var(--lacquer-raised);
+}
+
+.consent__allow {
+  border: 0;
+  background: var(--marigold);
+  color: var(--lacquer);
+}
+
+.consent__allow:hover {
+  background: var(--gold);
+}
+
+.consent__actions button:focus-visible,
+.about__privacy:focus-visible {
+  outline: 2px solid var(--marigold);
+  outline-offset: 2px;
+}
+
+.about__privacy {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .consent {
+    left: 10px;
+    right: 10px;
+    width: auto;
+    bottom: calc(var(--rail-height, 0px) + 8px);
+  }
+
+  .consent__actions button {
+    flex: 1;
+    min-height: 44px;
+  }
 }

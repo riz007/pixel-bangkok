@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 
 import { MapExplorer } from "@/features/map/MapExplorer";
 import { areas, places } from "@/lib/server-data";
-import { SITE_NAME } from "@/lib/site";
+import { clip, DESCRIPTION, OG_IMAGE_PATH, SHORT_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
-const OG_IMAGE = { url: "/og.png", width: 1200, height: 630 };
+const OG_IMAGE = { url: OG_IMAGE_PATH, width: 1200, height: 630 };
+const TITLE_LIMIT = 60 - ` · ${SITE_NAME}`.length;
 
 interface HomePageProps {
   searchParams: Promise<{ area?: string | string[]; place?: string | string[] }>;
@@ -26,22 +27,40 @@ export async function generateMetadata({ searchParams }: HomePageProps): Promise
   const canonical = `/?${query.toString()}`;
   const place = placeId ? (await places(area.id)).find((entry) => entry.id === placeId) : null;
   if (place) {
-    const title = place.name_th ? `${place.name_en} · ${place.name_th}` : place.name_en;
-    const description = `${place.description} See ${place.name_en} on ${SITE_NAME}, an isometric pixel-art map of Bangkok.`;
+    const bilingual = place.name_th ? `${place.name_en} · ${place.name_th}` : place.name_en;
+    const title = clip(bilingual.length <= TITLE_LIMIT ? bilingual : place.name_en, TITLE_LIMIT);
+    const lead = place.description
+      ? `${place.description.charAt(0).toUpperCase()}${place.description.slice(1)}. `
+      : "";
+    const summary = `${lead}See ${place.name_en} on ${SITE_NAME}, a pixel-art map of Bangkok.`;
+    const description = clip(summary, 155);
+    const social = clip(summary, 125);
     return {
-      title,
+      title: { absolute: `${title} · ${SITE_NAME}` },
       description,
       alternates: { canonical },
-      openGraph: { title, description, url: canonical, images: [OG_IMAGE] },
-      twitter: { card: "summary_large_image", title, description, images: [OG_IMAGE.url] },
+      openGraph: { title, description: social, url: canonical, images: [OG_IMAGE] },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description: social,
+        images: [OG_IMAGE.url],
+      },
     };
   }
-  const title = area.name.th ? `${area.name.en} · ${area.name.th}` : area.name.en;
+  const bilingual = area.name.th ? `${area.name.en} · ${area.name.th}` : area.name.en;
+  const title = clip(bilingual.length <= TITLE_LIMIT ? bilingual : area.name.en, TITLE_LIMIT);
   return {
-    title,
+    title: { absolute: `${title} · ${SITE_NAME}` },
+    description: DESCRIPTION,
     alternates: { canonical },
-    openGraph: { title, url: canonical, images: [OG_IMAGE] },
-    twitter: { card: "summary_large_image", title, images: [OG_IMAGE.url] },
+    openGraph: { title, description: SHORT_DESCRIPTION, url: canonical, images: [OG_IMAGE] },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: SHORT_DESCRIPTION,
+      images: [OG_IMAGE.url],
+    },
   };
 }
 

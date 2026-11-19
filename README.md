@@ -3,7 +3,7 @@
 An interactive isometric pixel-art map of Bangkok you can pan, zoom and search, street by street.
 Temples, canals, markets, the Chao Phraya, the BTS and MRT, in Thai and English.
 
-![Pixel Bangkok: the Chao Phraya and Rattanakosin](apps/web/public/og.png)
+![Pixel Bangkok: the Chao Phraya and Rattanakosin](apps/web/public/og.jpg)
 
 ## What you can do
 
@@ -70,6 +70,7 @@ for a web host (about 1.4 GB).
    - `NEXT_PUBLIC_MAP_ASSETS_URL`: your bucket's address
    - `NEXT_PUBLIC_MAKER_NAME`: your name, shown in About
    - `NEXT_PUBLIC_REPO_URL`: this repository, linked in About (optional)
+   - `NEXT_PUBLIC_GTM_ID`: your Google Tag Manager container, e.g. `GTM-XXXXXXX` (optional)
 3. Submit `/sitemap.xml` in Google Search Console.
 
 ## Credits and licence

@@ -76,6 +76,12 @@ const en = {
   aiOffLabel: "Show AI art",
   trafficOnLabel: "Pause traffic and boats",
   trafficOffLabel: "Play traffic and boats",
+  consentTitle: "Cookies",
+  consentText:
+    "May we use analytics cookies to count visits and improve the map? Nothing is stored until you allow it.",
+  consentAllow: "Allow",
+  consentDecline: "Decline",
+  privacySettings: "Privacy settings",
   faqTitle: "Questions",
   faq: [
     [
@@ -96,7 +102,7 @@ const en = {
     ],
     [
       "Is it free to use?",
-      "Yes. It is free, needs no account and collects no personal data. Map data is © OpenStreetMap contributors under the ODbL.",
+      "Yes. It is free and needs no account. Visits are measured with Google Tag Manager. Map data is © OpenStreetMap contributors under the ODbL.",
     ],
   ] as [string, string][],
 };
@@ -176,6 +182,12 @@ const th: Strings = {
   aiOffLabel: "ดูภาพ AI",
   trafficOnLabel: "หยุดรถและเรือ",
   trafficOffLabel: "เล่นรถและเรือ",
+  consentTitle: "คุกกี้",
+  consentText:
+    "ขออนุญาตใช้คุกกี้วิเคราะห์เพื่อนับการเข้าชมและปรับปรุงแผนที่ จะไม่มีการจัดเก็บใด ๆ จนกว่าคุณจะอนุญาต",
+  consentAllow: "อนุญาต",
+  consentDecline: "ไม่อนุญาต",
+  privacySettings: "ตั้งค่าความเป็นส่วนตัว",
   faqTitle: "คำถามที่พบบ่อย",
   faq: [
     [
@@ -196,7 +208,7 @@ const th: Strings = {
     ],
     [
       "ใช้ฟรีไหม",
-      "ใช้ฟรี ไม่ต้องสมัครสมาชิก และไม่เก็บข้อมูลส่วนตัว ข้อมูลแผนที่ © ผู้ร่วมพัฒนา OpenStreetMap ภายใต้สัญญาอนุญาต ODbL",
+      "ใช้ฟรีและไม่ต้องสมัครสมาชิก มีการวัดสถิติการเข้าชมด้วย Google Tag Manager ข้อมูลแผนที่ © ผู้ร่วมพัฒนา OpenStreetMap ภายใต้สัญญาอนุญาต ODbL",
     ],
   ],
 };

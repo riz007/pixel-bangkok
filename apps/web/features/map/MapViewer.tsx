@@ -130,6 +130,7 @@ export function MapViewer({
     let viewer: OpenSeadragon.Viewer | null = null;
     let overlay: OpenSeadragon.Viewer | null = null;
     let front: OpenSeadragon.Viewer | null = null;
+    let navigatorObserver: ResizeObserver | null = null;
     setStatus("loading");
     setFailedTiles(0);
     availableRef.current(false);
@@ -245,6 +246,11 @@ export function MapViewer({
         };
         current.addHandler("update-viewport", updateSmoothing);
         current.addHandler("resize", positionMarkers);
+        const navigatorElement = document.getElementById(navigatorId);
+        if (navigatorElement && typeof ResizeObserver !== "undefined") {
+          navigatorObserver = new ResizeObserver(() => current.navigator?.updateSize());
+          navigatorObserver.observe(navigatorElement);
+        }
         current.addHandler("open-failed", () => setStatus("error"));
         current.addHandler("tile-loaded", () => {
           loadedTiles += 1;
@@ -339,6 +345,7 @@ export function MapViewer({
       frontViewerRef.current = null;
       overlay?.destroy();
       front?.destroy();
+      navigatorObserver?.disconnect();
       viewer?.destroy();
     };
   }, [manifest, baseUrl, pois, navigatorId, commandsRef]);

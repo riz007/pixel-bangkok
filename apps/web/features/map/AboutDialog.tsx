@@ -2,6 +2,7 @@
 
 import type { RefObject } from "react";
 
+import { ANALYTICS_ENABLED, openConsent } from "@/lib/consent";
 import { FULL_NAME_ROMAN, FULL_NAME_TH, type Lang, STRINGS } from "@/lib/i18n";
 import type { TileManifest } from "@/lib/manifest";
 
@@ -88,6 +89,20 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
         )}
         {retrieved && <li className="about__licence">OpenStreetMap {retrieved}</li>}
       </ul>
+      {ANALYTICS_ENABLED && (
+        <p>
+          <button
+            type="button"
+            className="about__privacy"
+            onClick={() => {
+              dialogRef.current?.close();
+              openConsent();
+            }}
+          >
+            {text.privacySettings}
+          </button>
+        </p>
+      )}
       {(MAKER || REPO_URL) && (
         <p className="about__maker">
           {MAKER && text.madeBy(MAKER)}

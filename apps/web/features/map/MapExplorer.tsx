@@ -7,6 +7,7 @@ import { STRINGS } from "@/lib/i18n";
 import { tourOrder } from "@/lib/tour";
 
 import { AboutDialog } from "./AboutDialog";
+import { ConsentBanner } from "./ConsentBanner";
 import { toggleFullscreen } from "./fullscreen";
 import { PixelIcon } from "./icons";
 import { type MapCommands, MapViewer } from "./MapViewer";
@@ -326,6 +327,7 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
             <AboutDialog dialogRef={aboutRef} manifest={data.manifest} lang={lang} />
           </>
         )}
+        <ConsentBanner lang={lang} />
         <p className="toast" role="status" aria-live="polite">
           {toast}
         </p>
