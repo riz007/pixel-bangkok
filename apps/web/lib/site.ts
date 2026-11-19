@@ -5,6 +5,10 @@ export const SITE_NAME = "Pixel Bangkok";
 export const SITE_NAME_TH = "กรุงเทพมหานคร";
 export const REPO_URL = process.env.NEXT_PUBLIC_REPO_URL || null;
 export const MAKER_NAME = process.env.NEXT_PUBLIC_MAKER_NAME || null;
+export const CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "")
+  ? (process.env.NEXT_PUBLIC_CONTACT_EMAIL as string)
+  : null;
+export const PRIVACY_ID = "privacy-notice";
 
 export const TITLE = "Pixel Bangkok · กรุงเทพมหานคร | Pixel-Art City Map";
 /** Search snippet, kept under ~155 characters. */

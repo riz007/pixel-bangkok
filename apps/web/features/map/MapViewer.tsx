@@ -48,6 +48,18 @@ function northDegrees(manifest: TileManifest): number {
   return (Math.atan2(px[1] ?? 0, -(py[1] ?? 0)) * 180) / Math.PI;
 }
 
+const TILE_RETRIES = 3;
+const TILE_RETRY_DELAY_MS = 1200;
+
+/** OpenSeadragon reports cancelled downloads (panning, layer swaps) as failures with exactly
+ * this message; real errors read "...aborted or errored out" or mention a timeout. */
+const CANCELLED = "Image load aborted.";
+
+function isRealFailure(event: { message?: string; maxReached?: boolean }): boolean {
+  if (event.maxReached === false) return false;
+  return event.message !== CANCELLED;
+}
+
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -159,6 +171,8 @@ export function MapViewer({
           smoothTileEdgesMinZoom: Infinity,
           maxImageCacheCount: 1500,
           imageLoaderLimit: 8,
+          tileRetryMax: TILE_RETRIES,
+          tileRetryDelay: TILE_RETRY_DELAY_MS,
           visibilityRatio: 0.6,
           constrainDuringPan: true,
           animationTime: prefersReducedMotion() ? 0 : 0.6,
@@ -256,7 +270,8 @@ export function MapViewer({
           loadedTiles += 1;
           setStatus("ready");
         });
-        current.addHandler("tile-load-failed", () => {
+        current.addHandler("tile-load-failed", (event) => {
+          if (!isRealFailure(event)) return;
           setFailedTiles((count) => count + 1);
           if (loadedTiles === 0) setStatus("error");
         });
@@ -284,6 +299,8 @@ export function MapViewer({
             smoothTileEdgesMinZoom: Infinity,
             maxImageCacheCount: 1500,
             imageLoaderLimit: 4,
+            tileRetryMax: TILE_RETRIES,
+            tileRetryDelay: TILE_RETRY_DELAY_MS,
             visibilityRatio: 0,
             constrainDuringPan: false,
             animationTime: 0,

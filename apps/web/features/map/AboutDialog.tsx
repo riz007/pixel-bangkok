@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 
 import { ANALYTICS_ENABLED, openConsent } from "@/lib/consent";
+import { CONTACT_EMAIL, PRIVACY_ID } from "@/lib/site";
 import { FULL_NAME_ROMAN, FULL_NAME_TH, type Lang, STRINGS } from "@/lib/i18n";
 import type { TileManifest } from "@/lib/manifest";
 
@@ -89,6 +90,34 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
         )}
         {retrieved && <li className="about__licence">OpenStreetMap {retrieved}</li>}
       </ul>
+      <section className="about__privacy-notice" aria-labelledby={PRIVACY_ID}>
+        <h3 id={PRIVACY_ID} tabIndex={-1}>
+          {text.privacyTitle}
+        </h3>
+        <p>
+          {text.privacyWho(MAKER ?? null, CONTACT_EMAIL !== null)}
+          {CONTACT_EMAIL && (
+            <>
+              {" "}
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            </>
+          )}
+        </p>
+        {ANALYTICS_ENABLED && <p>{text.privacyAnalytics}</p>}
+        <p>{text.privacyHosting}</p>
+        <p>{text.privacyNone}</p>
+        <p>{text.privacyTransfer}</p>
+        <p>
+          {text.privacyRights}
+          {CONTACT_EMAIL && (
+            <>
+              {" "}
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+            </>
+          )}
+        </p>
+        <p className="about__licence">{text.privacyUpdated}</p>
+      </section>
       {ANALYTICS_ENABLED && (
         <p>
           <button

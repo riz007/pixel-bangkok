@@ -82,6 +82,21 @@ const en = {
   consentAllow: "Allow",
   consentDecline: "Decline",
   privacySettings: "Privacy settings",
+  privacyLink: "Privacy notice",
+  privacyTitle: "Privacy notice",
+  privacyUpdated: "Last updated 19 November 2026",
+  privacyWho: (maker: string | null, hasContact: boolean) =>
+    `Pixel Bangkok${maker ? `, run by ${maker},` : ""} is responsible for the personal data described here (the data controller under Thailand's Personal Data Protection Act).${hasContact ? " Contact:" : ""}`,
+  privacyAnalytics:
+    "Analytics (only if you choose Allow): Google Analytics, loaded through Google Tag Manager, sets cookies to count visits and see which places and features are used, along with your device type, browser and approximate location. It is kept for up to 14 months. The legal basis is your consent, which you can withdraw at any time in Privacy settings.",
+  privacyHosting:
+    "Hosting: to deliver the site and keep it secure, Vercel and Cloudflare process your IP address and request details in short-lived server logs. The legal basis is our legitimate interest in running the site.",
+  privacyNone:
+    "There are no accounts or forms, and we do not sell personal data. Your language and cookie choices are saved only in your own browser.",
+  privacyTransfer:
+    "Google, Vercel and Cloudflare may process data outside Thailand under their own data protection safeguards.",
+  privacyRights:
+    "You can ask to access, correct or delete your data, object to its use, or withdraw consent. You can also complain to Thailand's Personal Data Protection Committee (PDPC).",
   faqTitle: "Questions",
   faq: [
     [
@@ -188,6 +203,21 @@ const th: Strings = {
   consentAllow: "อนุญาต",
   consentDecline: "ไม่อนุญาต",
   privacySettings: "ตั้งค่าความเป็นส่วนตัว",
+  privacyLink: "ประกาศความเป็นส่วนตัว",
+  privacyTitle: "ประกาศความเป็นส่วนตัว",
+  privacyUpdated: "ปรับปรุงล่าสุด 19 พฤศจิกายน 2569",
+  privacyWho: (maker: string | null, hasContact: boolean) =>
+    `Pixel Bangkok${maker ? ` ซึ่งดำเนินการโดย ${maker}` : ""} เป็นผู้ควบคุมข้อมูลส่วนบุคคลที่ระบุไว้ในประกาศนี้ ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562${hasContact ? " ติดต่อ:" : ""}`,
+  privacyAnalytics:
+    "การวิเคราะห์การใช้งาน (เฉพาะเมื่อคุณกดอนุญาต): Google Analytics ซึ่งโหลดผ่าน Google Tag Manager จะตั้งคุกกี้เพื่อนับการเข้าชมและดูว่ามีการใช้สถานที่และฟีเจอร์ใดบ้าง รวมถึงประเภทอุปกรณ์ เบราว์เซอร์ และตำแหน่งโดยประมาณ ข้อมูลจะเก็บไว้ไม่เกิน 14 เดือน ฐานทางกฎหมายคือความยินยอมของคุณ ซึ่งถอนได้ทุกเมื่อในตั้งค่าความเป็นส่วนตัว",
+  privacyHosting:
+    "การให้บริการเว็บไซต์: Vercel และ Cloudflare ประมวลผลที่อยู่ IP และรายละเอียดการเข้าใช้งานในบันทึกของเซิร์ฟเวอร์ที่เก็บไว้ช่วงสั้น ๆ เพื่อให้บริการเว็บไซต์และรักษาความปลอดภัย ฐานทางกฎหมายคือประโยชน์โดยชอบด้วยกฎหมายในการดำเนินงานเว็บไซต์",
+  privacyNone:
+    "เว็บไซต์นี้ไม่มีระบบสมาชิกหรือแบบฟอร์ม และไม่ขายข้อมูลส่วนบุคคล การตั้งค่าภาษาและคุกกี้ของคุณจะถูกบันทึกไว้ในเบราว์เซอร์ของคุณเท่านั้น",
+  privacyTransfer:
+    "Google, Vercel และ Cloudflare อาจประมวลผลข้อมูลนอกประเทศไทย ภายใต้มาตรการคุ้มครองข้อมูลของผู้ให้บริการแต่ละราย",
+  privacyRights:
+    "คุณมีสิทธิขอเข้าถึง แก้ไข หรือลบข้อมูล คัดค้านการใช้ข้อมูล หรือถอนความยินยอม และสามารถร้องเรียนต่อสำนักงานคณะกรรมการคุ้มครองข้อมูลส่วนบุคคล (สคส.)",
   faqTitle: "คำถามที่พบบ่อย",
   faq: [
     [

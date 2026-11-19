@@ -164,7 +164,10 @@ test("shows a fallback with retry when map data is unavailable", async ({ page }
 test("shows an error when tiles fail to load", async ({ page }) => {
   await page.route(TILE_URL, (route) => route.fulfill({ status: 500, body: "" }));
   await page.goto("/?area=wat-arun");
-  await expect(page.locator(".map__status--error")).toContainText("could not be loaded");
+  // Tiles are retried three times before the viewer gives up.
+  await expect(page.locator(".map__status--error")).toContainText("could not be loaded", {
+    timeout: 15_000,
+  });
 });
 
 test("page never scrolls horizontally", async ({ page }) => {

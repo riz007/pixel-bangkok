@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import { imageToLonLat, lonLatToImage, type Point } from "@/lib/coords";
 import { STRINGS } from "@/lib/i18n";
+import { PRIVACY_ID } from "@/lib/site";
 import { tourOrder } from "@/lib/tour";
 
 import { AboutDialog } from "./AboutDialog";
@@ -108,6 +109,15 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
       ? `#map=18/${location.lat.toFixed(5)}/${location.lon.toFixed(5)}`
       : "";
     window.open(`https://www.openstreetmap.org/note/new${hash}`, "_blank", "noopener,noreferrer");
+  };
+
+  const openPrivacy = () => {
+    const dialog = aboutRef.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    const heading = document.getElementById(PRIVACY_ID);
+    heading?.scrollIntoView({ block: "start" });
+    heading?.focus();
   };
 
   const share = async () => {
@@ -327,7 +337,7 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
             <AboutDialog dialogRef={aboutRef} manifest={data.manifest} lang={lang} />
           </>
         )}
-        <ConsentBanner lang={lang} />
+        <ConsentBanner lang={lang} onPrivacy={openPrivacy} />
         <p className="toast" role="status" aria-live="polite">
           {toast}
         </p>

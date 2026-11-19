@@ -1231,3 +1231,28 @@ kbd {
     min-height: 44px;
   }
 }
+
+.about__privacy-notice h3:focus-visible {
+  outline: 2px solid var(--marigold);
+  outline-offset: 4px;
+}
+
+.about__privacy-notice p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+
+.consent__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--marigold);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.consent__link:focus-visible {
+  outline: 2px solid var(--marigold);
+  outline-offset: 2px;
+}
