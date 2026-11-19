@@ -20,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const place of await places(area.id)) {
       entries.push({
         url: absolute(
-          `/?area=${area.id}&place=${encodeURIComponent(place.id)}`,
+          `/?area=${area.id}&amp;place=${encodeURIComponent(place.id)}`,
         ),
         changeFrequency: "monthly",
         priority: 0.5,

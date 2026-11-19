@@ -1,6 +1,7 @@
 {
   "name": "pixel-bangkok",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "pipeline": "uv run --project pipeline pixel-bangkok",

@@ -139,7 +139,7 @@ test("attribution is visible and credits open in the About dialog", async ({ pag
   await page.getByRole("button", { name: "About", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "About this map" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText(/ODbL/)).toBeVisible();
+  await expect(dialog.locator(".about__credits").getByText(/ODbL/)).toBeVisible();
   const manifest = await (await page.request.get("/maps/wat-arun/manifest.json")).json();
   for (const attribution of manifest.attributions) {
     await expect(dialog.getByRole("link", { name: attribution.text })).toBeVisible();

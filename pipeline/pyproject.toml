@@ -1,6 +1,7 @@
 [project]
 name = "pixel-bangkok-pipeline"
 version = "0.1.0"
+license = "MIT"
 description = "Offline asset-generation pipeline for Pixel Bangkok"
 requires-python = ">=3.12,<3.14"
 dependencies = [
