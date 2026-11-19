@@ -12,6 +12,7 @@ interface AboutDialogProps {
 }
 
 const MAKER = process.env.NEXT_PUBLIC_MAKER_NAME;
+const REPO_URL = process.env.NEXT_PUBLIC_REPO_URL;
 
 export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
   const text = STRINGS[lang];
@@ -77,7 +78,17 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
         )}
         {retrieved && <li className="about__licence">OpenStreetMap {retrieved}</li>}
       </ul>
-      {MAKER && <p className="about__maker">{text.madeBy(MAKER)}</p>}
+      {(MAKER || REPO_URL) && (
+        <p className="about__maker">
+          {MAKER && text.madeBy(MAKER)}
+          {MAKER && REPO_URL && " · "}
+          {REPO_URL && (
+            <a href={REPO_URL} target="_blank" rel="noreferrer">
+              {text.sourceCode}
+            </a>
+          )}
+        </p>
+      )}
     </dialog>
   );
 }

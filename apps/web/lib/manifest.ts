@@ -21,6 +21,7 @@ export interface TileManifest {
     minLevel: number;
     maxLevel: number;
     levels: TileLevel[];
+    present: Record<string, Record<number, string>>;
   };
   attributions: Attribution[];
   projection: {
@@ -183,6 +184,23 @@ function parseGeographic(projection: Json): GeographicTransforms {
   };
 }
 
+function parsePresent(value: unknown): Record<string, Record<number, string>> {
+  if (value === undefined) return {};
+  const layers = object(value, "manifest.tiles.present");
+  const result: Record<string, Record<number, string>> = {};
+  for (const [layer, levels] of Object.entries(layers)) {
+    const entries = object(levels, `manifest.tiles.present.${layer}`);
+    result[layer] = {};
+    for (const [level, bits] of Object.entries(entries)) {
+      if (typeof bits !== "string") {
+        throw new DataError(`manifest.tiles.present.${layer}.${level} must be a string`);
+      }
+      result[layer][Number(level)] = bits;
+    }
+  }
+  return result;
+}
+
 export function parseManifest(input: unknown): TileManifest {
   const root = object(input, "manifest");
   const version = number(root, "version", "manifest");
@@ -278,6 +296,7 @@ export function parseManifest(input: unknown): TileManifest {
       minLevel,
       maxLevel,
       levels,
+      present: parsePresent(tiles.present),
     },
     attributions,
     projection: {

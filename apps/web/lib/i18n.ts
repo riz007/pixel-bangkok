@@ -61,6 +61,7 @@ const en = {
   shortcutsTitle: "Keyboard shortcuts",
   dataTitle: "Data and credits",
   madeBy: (name: string) => `Made by ${name}`,
+  sourceCode: "Source code on GitHub",
   shortcuts: [
     ["/", "Search places or lat, long"],
     ["P", "Show or hide places"],
@@ -137,6 +138,7 @@ const th: Strings = {
   shortcutsTitle: "ปุ่มลัด",
   dataTitle: "ข้อมูลและเครดิต",
   madeBy: (name: string) => `สร้างโดย ${name}`,
+  sourceCode: "ซอร์สโค้ดบน GitHub",
   shortcuts: [
     ["/", "ค้นหาสถานที่หรือพิกัด"],
     ["P", "แสดงหรือซ่อนสถานที่"],

@@ -66,10 +66,10 @@ def _value_noise(x: np.ndarray, y: np.ndarray, cell: float, seed: int) -> np.nda
     return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy
 
 
-def edge_dissolve(
+def _ground(
     bounds: MapBounds, render: RenderConfig, box: tuple[int, int, int, int]
-) -> np.ndarray:
-    """Native pixels in `box` (left, top, right, bottom) that dissolve into the background."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """World x, y on the ground plane under each native pixel of `box`, plus pixel x, y."""
     projection = IsoProjection.create(bounds, render)
     left, top, right, bottom = box
     ys, xs = np.mgrid[top:bottom, left:right].astype(np.float64)
@@ -77,6 +77,22 @@ def edge_dissolve(
     dx, dy = xs - projection.tx, ys - projection.ty
     wx = (projection.by * dx - projection.ay * dy) / determinant
     wy = (projection.ax * dy - projection.bx * dx) / determinant
+    return wx, wy, xs, ys
+
+
+def inside_area(
+    bounds: MapBounds, render: RenderConfig, box: tuple[int, int, int, int]
+) -> np.ndarray:
+    """Native pixels whose ground point lies inside the area rectangle."""
+    wx, wy, _, _ = _ground(bounds, render, box)
+    return (wx >= 0) & (wx <= bounds.width_m) & (wy >= 0) & (wy <= bounds.height_m)
+
+
+def edge_dissolve(
+    bounds: MapBounds, render: RenderConfig, box: tuple[int, int, int, int]
+) -> np.ndarray:
+    """Native pixels in `box` (left, top, right, bottom) that dissolve into the background."""
+    wx, wy, xs, ys = _ground(bounds, render, box)
     band = min(EDGE_FADE_MAX_M, EDGE_FADE_FRACTION * min(bounds.width_m, bounds.height_m))
     radius = EDGE_CORNER_BANDS * band
     qx = np.maximum.reduce([radius - wx, np.zeros_like(wx), wx - (bounds.width_m - radius)])
@@ -177,15 +193,16 @@ def run(render: RenderConfig, build_dir: Path, area: AreaConfig | None = None) -
             if bounds is not None
             else np.zeros((block.height, block.width), dtype=bool)
         )
+        cover = dissolve & inside_area(bounds, render, box) if bounds is not None else dissolve
         master = faded(master, dissolve, render)
         master.save(blocks_dir / f"master_{block.name}.png")
         with Image.open(blocks_dir / f"occlusion_{block.name}.png") as occlusion:
-            mask = np.asarray(occlusion.convert("1")) | dissolve
+            mask = np.asarray(occlusion.convert("1")) | cover
         overlay_from_mask(master, mask).save(blocks_dir / f"overlay_{block.name}.png")
         front_path = blocks_dir / f"front_{block.name}.png"
         if front_path.exists():
             with Image.open(front_path) as front:
-                front_mask = np.asarray(front.convert("1")) | dissolve
+                front_mask = np.asarray(front.convert("1")) | cover
             overlay_from_mask(master, front_mask).save(
                 blocks_dir / f"front_overlay_{block.name}.png"
             )

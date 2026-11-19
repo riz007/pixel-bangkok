@@ -136,6 +136,32 @@ def write_index(maps_dir: Path) -> Path:
     return output
 
 
+EDGE_CLEAR_PX = 12
+EDGE_MAX_DISSOLVED = 0.05
+
+
+def visible_pois(
+    pois: list[dict], bounds: MapBounds, render: RenderConfig, keep: set[str] = frozenset()
+) -> list[dict]:
+    """Drop generated places whose spot lies in the dissolved coverage edge
+    (see pixelart.edge_dissolve); places in `keep` (curated) always stay."""
+    from .pixelart import edge_dissolve
+
+    scale = render.upscale
+    kept = []
+    for poi in pois:
+        x, y = int(poi["image"]["x"] / scale), int(poi["image"]["y"] / scale)
+        if poi["id"] in keep:
+            kept.append(poi)
+            continue
+        box = (x - EDGE_CLEAR_PX, y - EDGE_CLEAR_PX, x + EDGE_CLEAR_PX, y + EDGE_CLEAR_PX)
+        if float(edge_dissolve(bounds, render, box).mean()) <= EDGE_MAX_DISSOLVED:
+            kept.append(poi)
+    if len(kept) < len(pois):
+        log.info("left out %d places inside the faded map edge", len(pois) - len(kept))
+    return kept
+
+
 def run(
     area: AreaConfig,
     render: RenderConfig,
@@ -150,7 +176,12 @@ def run(
         raise FileNotFoundError(f"no tiles or manifest in {build_dir}; run the tile stage first")
     bounds = MapBounds.from_area(area)
     projection = IsoProjection.create(bounds, render)
-    pois = project_pois(load_pois(curated_dir, processed_dir, bounds), bounds, projection)
+    pois = visible_pois(
+        project_pois(load_pois(curated_dir, processed_dir, bounds), bounds, projection),
+        bounds,
+        render,
+        keep={poi.id for poi in _read_pois(curated_dir / "pois.json")},
+    )
     if publish_dir.exists():
         shutil.rmtree(publish_dir)
     publish_dir.mkdir(parents=True)

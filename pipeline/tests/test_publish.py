@@ -132,3 +132,19 @@ def test_thumbnails_are_cropped_from_blocks(tmp_path):
     with Image.open(tmp_path / "places" / "temple.webp") as thumb:
         assert thumb.size == THUMBNAIL_SIZE
     assert write_thumbnails(pois, tmp_path / "missing", tmp_path / "x") == 0
+
+
+def test_places_in_the_faded_edge_are_left_out(bounds, render_config):
+    from pixel_bangkok.projection import IsoProjection
+    from pixel_bangkok.publish import visible_pois
+
+    projection = IsoProjection.create(bounds, render_config)
+    centre = projection.world_to_master(bounds.width_m / 2, bounds.height_m / 2)
+    edge = projection.world_to_master(bounds.width_m / 2, 0.5)
+    pois = [
+        {"id": "centre", "image": {"x": centre[0], "y": centre[1]}},
+        {"id": "edge", "image": {"x": edge[0], "y": edge[1]}},
+    ]
+    assert [poi["id"] for poi in visible_pois(pois, bounds, render_config)] == ["centre"]
+    kept = visible_pois(pois, bounds, render_config, keep={"edge"})
+    assert [poi["id"] for poi in kept] == ["centre", "edge"]

@@ -8,6 +8,7 @@ pixels on interior edges.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -24,6 +25,7 @@ from PIL import Image
 from .config import AreaConfig, RenderConfig, TileConfig
 from .crs import MapBounds
 from .projection import IsoProjection
+from .render import parse_color
 
 log = logging.getLogger(__name__)
 
@@ -115,8 +117,12 @@ def write_pyramid_blocks(
     tiles_dir: Path,
     tiles: TileConfig,
     work_dir: Path,
+    blank: int | None = None,
 ) -> list[dict[str, int]]:
     """Deep Zoom pyramid built from image blocks without holding the whole image.
+
+    Tiles that are entirely `blank` (a packed RGBA colour) or entirely transparent are not
+    written; `present.json` in `tiles_dir` holds a bitmap of the tiles that exist per level.
 
     `blocks` maps each block's top-left corner (multiples of the tile size) to a
     loader. Lower levels are 2x2 averages of the level above, tile by tile, so
@@ -161,7 +167,9 @@ def write_pyramid_blocks(
                 _save_core(work_dir, entry["level"], column, row, box_pool(np.vstack(rows)))
 
     save_options: dict[str, Any] = {"lossless": tiles.lossless} if tiles.format == "webp" else {}
+    present: dict[str, str] = {}
     for entry in levels:
+        bits = np.zeros(math.ceil(entry["width"] / size) * math.ceil(entry["height"] / size), bool)
         entry["columns"] = math.ceil(entry["width"] / size)
         entry["rows"] = math.ceil(entry["height"] / size)
         level_dir = tiles_dir / str(entry["level"])
@@ -199,11 +207,30 @@ def write_pyramid_blocks(
                         region[sy0 - upper : sy1 - upper, sx0 - left : sx1 - left] = piece[
                             sy0 - y0 : sy1 - y0, sx0 - x0 : sx1 - x0
                         ]
+                empty = bool(np.all((region >> 24) == 0)) or (
+                    blank is not None and bool(np.all(region == blank))
+                )
+                if empty:
+                    continue
+                bits[row * entry["columns"] + column] = True
                 _unpack(region, mode).save(
                     level_dir / f"{column}_{row}.{tiles.format}", **save_options
                 )
+        if not bits.all():
+            present[str(entry["level"])] = base64.b64encode(
+                np.packbits(bits, bitorder="little").tobytes()
+            ).decode()
+    (tiles_dir / PRESENT_NAME).write_text(json.dumps(present), encoding="utf-8")
     shutil.rmtree(work_dir)
     return levels
+
+
+PRESENT_NAME = "present.json"
+
+
+def read_present(tiles_dir: Path) -> dict[str, str]:
+    path = tiles_dir / PRESENT_NAME
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
 def write_pyramid(master: Image.Image, tiles_dir: Path, tiles: TileConfig) -> list[dict[str, int]]:
@@ -361,6 +388,8 @@ def run(
             for block in blocks
         ]
 
+    red, green, blue, _ = parse_color(render.palette["background"])
+    background = red | (green << 8) | (blue << 16) | (255 << 24)
     has_overlay = all((blocks_dir / f"overlay_{block.name}.png").exists() for block in blocks)
     reuse = ai_only and (build_dir / "tiles").exists()
     if reuse:
@@ -374,6 +403,7 @@ def run(
             build_dir / "tiles",
             render.tiles,
             build_dir / ".tiles-work",
+            blank=background,
         )
     if has_overlay and reuse:
         has_overlay = (build_dir / "overlay").exists()
@@ -422,6 +452,7 @@ def run(
                 build_dir / directory,
                 render.tiles,
                 build_dir / f".{directory}-work",
+                blank=background if mode == "RGB" else None,
             )
         elif (build_dir / directory).exists():
             shutil.rmtree(build_dir / directory)
@@ -440,6 +471,11 @@ def run(
         )
         + (("wikidata",) if (processed_dir / "pois.json").exists() else ()),
     )
+    manifest["tiles"]["present"] = {
+        published: read_present(build_dir / built)
+        for built, published in PYRAMID_DIRS.items()
+        if (build_dir / built).exists() and read_present(build_dir / built)
+    }
     animation: dict[str, Any] = {}
     if has_overlay:
         animation["overlay_url_template"] = "overlay/{level}/{column}_{row}.{format}"

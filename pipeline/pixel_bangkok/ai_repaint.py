@@ -392,7 +392,7 @@ def compose(
     render: RenderConfig, build_dir: Path, area: AreaConfig | None = None
 ) -> dict[str, Any]:
     """Blend accepted windows over the procedural master, block by block."""
-    from .pixelart import edge_dissolve
+    from .pixelart import edge_dissolve, inside_area
 
     invalidate(build_dir)
     ai_dir = build_dir / "ai"
@@ -414,17 +414,18 @@ def compose(
             else np.zeros(result.shape[:2], dtype=bool)
         )
         result[dissolve] = np.array(parse_color(render.palette["background"])[:3], np.uint8)
+        cover = dissolve & inside_area(MapBounds.from_area(area), render, box) if area else dissolve
         covered += int(np.count_nonzero(total > 0))
         master = Image.fromarray(result, "RGB")
         master.save(blocks_dir / f"ai_master_{block.name}.png")
         with Image.open(blocks_dir / f"occlusion_{block.name}.png") as occlusion:
-            mask = np.asarray(occlusion.convert("1")) | dissolve
+            mask = np.asarray(occlusion.convert("1")) | cover
         rgba = np.dstack([result, np.where(mask, 255, 0).astype(np.uint8)])
         Image.fromarray(rgba, "RGBA").save(blocks_dir / f"ai_overlay_{block.name}.png")
         front_path = blocks_dir / f"front_{block.name}.png"
         if front_path.exists():
             with Image.open(front_path) as front:
-                front_mask = np.asarray(front.convert("1")) | dissolve
+                front_mask = np.asarray(front.convert("1")) | cover
             front_rgba = np.dstack([result, np.where(front_mask, 255, 0).astype(np.uint8)])
             Image.fromarray(front_rgba, "RGBA").save(
                 blocks_dir / f"ai_front_overlay_{block.name}.png"

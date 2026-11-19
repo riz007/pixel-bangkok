@@ -6,6 +6,7 @@ import {
   imageToViewport,
   lonLatToImage,
   parseLatLon,
+  tilePresence,
   tileSourceOptions,
   tileUrl,
   viewportToImage,
@@ -70,4 +71,20 @@ test("latitude, longitude text is parsed in map-app order", () => {
   assert.deepEqual(parseLatLon(" 13.7437 100.4897 "), { lat: 13.7437, lon: 100.4897 });
   assert.equal(parseLatLon("Wat Arun"), null);
   assert.equal(parseLatLon("95, 100"), null);
+});
+
+test("tiles missing from the presence bitmap are never requested", () => {
+  const level = manifest.tiles.levels.find((entry) => entry.columns * entry.rows >= 2)!;
+  const bits = new Uint8Array(Math.ceil((level.columns * level.rows) / 8));
+  bits[0] = 0b01;
+  const encoded = btoa(String.fromCharCode(...bits));
+  const withGaps = {
+    ...manifest,
+    tiles: { ...manifest.tiles, present: { tiles: { [level.level]: encoded } } },
+  };
+  const exists = tilePresence(withGaps, manifest.tiles.urlTemplate);
+  assert.equal(exists(level.level, 0, 0), true);
+  assert.equal(exists(level.level, 1, 0) || level.columns === 1, level.columns === 1);
+  assert.equal(exists(level.level, level.columns, 0), false);
+  assert.equal(tilePresence(manifest, "overlay/x")(level.level, 0, 0), true);
 });

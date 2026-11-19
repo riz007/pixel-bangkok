@@ -50,6 +50,36 @@ export function tileSourceOptions(
     maxLevel: manifest.tiles.maxLevel,
     getTileUrl: (level: number, column: number, row: number) =>
       tileUrl(manifest, baseUrl, level, column, row, template, version),
+    tileExists: tilePresence(manifest, template),
+  };
+}
+
+const decoded = new Map<string, Uint8Array>();
+
+function bitmap(encoded: string): Uint8Array {
+  let bytes = decoded.get(encoded);
+  if (!bytes) {
+    const binary = atob(encoded);
+    bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    decoded.set(encoded, bytes);
+  }
+  return bytes;
+}
+
+/** Whether a tile file exists; blank background tiles are not published (manifest bitmaps). */
+export function tilePresence(manifest: TileManifest, template: string) {
+  const layer = manifest.tiles.present[template.split("/")[0] ?? ""] ?? {};
+  const columns = new Map(manifest.tiles.levels.map((entry) => [entry.level, entry.columns]));
+  const rows = new Map(manifest.tiles.levels.map((entry) => [entry.level, entry.rows]));
+  return (level: number, column: number, row: number): boolean => {
+    const width = columns.get(level);
+    const height = rows.get(level);
+    if (width === undefined || height === undefined) return false;
+    if (column < 0 || row < 0 || column >= width || row >= height) return false;
+    const encoded = layer[level];
+    if (encoded === undefined) return true;
+    const index = row * width + column;
+    return ((bitmap(encoded)[index >> 3] ?? 0) >> (index & 7)) % 2 === 1;
   };
 }
 

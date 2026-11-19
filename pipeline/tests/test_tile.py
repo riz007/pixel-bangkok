@@ -136,3 +136,38 @@ def test_no_pyramid_is_written_into_working_folders():
 
     assert not set(PYRAMID_DIRS) & {"ai", "blocks", "layers"}
     assert PYRAMID_DIRS["ai_tiles"] == "ai"
+
+
+def test_blank_tiles_are_not_written_and_presence_is_recorded(tmp_path):
+    import base64
+    import json
+
+    import numpy as np
+
+    master = Image.new("RGB", (512, 256), (28, 20, 18))
+    master.paste((200, 100, 50), (0, 0, 100, 100))
+    tiles = TileConfig(tile_size=128, overlap=0, format="png", lossless=True)
+    blank = 28 | (20 << 8) | (18 << 16) | (255 << 24)
+    from pixel_bangkok.tile import write_pyramid_blocks
+
+    levels = write_pyramid_blocks(
+        [((0, 0), lambda: master)], 512, 256, "RGB", tmp_path / "t", tiles, tmp_path / "w", blank
+    )
+    top = levels[-1]["level"]
+    assert (tmp_path / "t" / str(top) / "0_0.png").exists()
+    assert not (tmp_path / "t" / str(top) / "3_1.png").exists()
+    present = json.loads((tmp_path / "t" / "present.json").read_text())
+    bits = np.unpackbits(
+        np.frombuffer(base64.b64decode(present[str(top)]), np.uint8), bitorder="little"
+    )
+    assert bits[0] == 1 and bits.sum() == 1
+
+
+def test_transparent_overlay_tiles_are_not_written(tmp_path):
+    overlay = Image.new("RGBA", (256, 128), (0, 0, 0, 0))
+    overlay.paste((10, 20, 30, 255), (0, 0, 10, 10))
+    tiles = TileConfig(tile_size=128, overlap=0, format="png", lossless=True)
+    levels = write_pyramid(overlay, tmp_path / "o", tiles)
+    top = levels[-1]["level"]
+    assert (tmp_path / "o" / str(top) / "0_0.png").exists()
+    assert not (tmp_path / "o" / str(top) / "1_0.png").exists()

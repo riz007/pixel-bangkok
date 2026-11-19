@@ -31,6 +31,8 @@ def main() -> int:
     parser.add_argument("--prompt-file", required=True)
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--size", type=int, default=1024)
+    parser.add_argument("--lora", action="append", default=[], help="LoRA adapter .safetensors")
+    parser.add_argument("--lora-scale", type=float, default=1.0)
     args = parser.parse_args()
     prompt = Path(args.prompt_file).read_text(encoding="utf-8").strip()
     jobs = [json.loads(line) for line in Path(args.jobs).read_text().splitlines() if line.strip()]
@@ -48,6 +50,8 @@ def main() -> int:
         model_config=config,
         compute_precision=None,
         small_text_encoder=True,
+        lora_paths=args.lora or None,
+        lora_scales=[args.lora_scale] * len(args.lora) if args.lora else None,
     )
     print(
         json.dumps({"event": "loaded", "seconds": round(time.monotonic() - started, 1)}), flush=True

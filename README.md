@@ -170,21 +170,38 @@ full-resolution levels (`minPixelRatio` 1) and caches up to 1,500 tiles.
 
 ## Deploying
 
-The web app and the map files are deployed separately; tile sets are too large for most page hosts.
+The web app (Vercel) and the map files (Cloudflare R2) are deployed separately: the published maps
+are about 1.6 GB and 85,000 files, far beyond what a page host should serve. `apps/web/public/maps/`
+is gitignored, so a Vercel build from Git never includes it.
 
-1. Generate and publish the areas you want (`pnpm pipeline all --area <id>`, plus the AI steps if
-   wanted). Published files are in `apps/web/public/maps/`.
-2. Upload `apps/web/public/maps/` to object storage with public read access (for example a Cloudflare
-   R2 bucket with a custom domain). Keep the folder structure and serve `.webp` as `image/webp`.
-   The viewer adds a content version (`?v=`) to every tile and thumbnail URL, so tiles, overlays,
-   `places/` and `motion.json` can be cached forever (`Cache-Control: public, max-age=31536000,
-   immutable`). Give `index.json`, `manifest.json` and `pois.json` a short cache (e.g. 5 minutes),
-   since they point at the current version.
-3. Deploy `apps/web` to a Next.js host (for example Vercel) with:
-   - `NEXT_PUBLIC_MAP_ASSETS_URL` = the public URL of the uploaded `maps/` folder
-   - `NEXT_PUBLIC_MAKER_NAME` = the name to credit in the About dialog
-4. Open the site, check the About dialog credits, and share a deep link such as
-   `/?area=inner-bangkok&place=wat-arun`.
+### Map files on R2
+
+1. Create an R2 bucket (for example `pixel-bangkok-maps`) and connect a custom domain to it, such
+   as `maps.example.com`. The `r2.dev` address is rate-limited and meant for testing only.
+2. Allow the site to read JSON from the bucket: set the bucket's CORS policy from
+   `deploy/r2-cors.json`, with your site's origin in `AllowedOrigins`. Tiles would draw without it,
+   but `index.json`, `manifest.json`, `pois.json` and `motion.json` are fetched by script.
+3. Create an R2 API token with object read and write access to that bucket, then add an rclone
+   remote with provider `Cloudflare` and those keys (`rclone config`).
+4. Upload: `deploy/upload-maps.sh <remote> <bucket>` (or name areas to upload only those).
+   Tiles, overlays, thumbnails and `motion.json` carry a content version (`?v=`) and are sent
+   with a one-year immutable cache; `index.json`, `manifest.json` and `pois.json` get 5 minutes.
+   Blank background tiles are not published; the manifest lists which tiles exist, so the viewer
+   never requests them.
+
+### Web app on Vercel
+
+1. Import the GitHub repository and set **Root Directory** to `apps/web` (framework: Next.js,
+   package manager: pnpm).
+2. Environment variables:
+   - `NEXT_PUBLIC_MAP_ASSETS_URL` = the bucket's public URL, e.g. `https://maps.example.com`
+   - `NEXT_PUBLIC_MAKER_NAME` = the name credited in the About dialog
+   - `NEXT_PUBLIC_REPO_URL` = the source repository linked in the About dialog (optional)
+3. Deploy, then check: the map loads, the About dialog credits are complete, a deep link such as
+   `/?area=bangkok&place=wat-arun` opens the place, and the browser console shows no CORS errors.
+
+When a map is regenerated, upload it first and only then redeploy (or not at all: the site reads
+the current `index.json` and manifests at runtime).
 
 ## Attribution
 
