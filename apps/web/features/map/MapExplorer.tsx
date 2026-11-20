@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { imageToLonLat, lonLatToImage, type Point } from "@/lib/coords";
+import { filterPlaces, findFilter } from "@/lib/filters";
 import { STRINGS } from "@/lib/i18n";
 import { PRIVACY_ID } from "@/lib/site";
 import { tourOrder } from "@/lib/tour";
@@ -12,6 +20,7 @@ import { ConsentBanner } from "./ConsentBanner";
 import { toggleFullscreen } from "./fullscreen";
 import { PixelIcon } from "./icons";
 import { type MapCommands, MapViewer } from "./MapViewer";
+import { PlaceFilters } from "./PlaceFilters";
 import { PlacePanel } from "./PlacePanel";
 import { PlacesRail } from "./PlacesRail";
 import { PoiSearch } from "./PoiSearch";
@@ -28,19 +37,29 @@ function subscribeReducedMotion(onChange: () => void) {
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+  return (
+    target.isContentEditable ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
+  );
 }
 
 interface MapExplorerProps {
   initialAreaId: string | null;
   initialPlaceId: string | null;
+  initialFilter: string | null;
 }
 
-export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps) {
+export function MapExplorer({
+  initialAreaId,
+  initialPlaceId,
+  initialFilter,
+}: MapExplorerProps) {
   const [lang, setLang] = useLang();
   const text = STRINGS[lang];
   const [areaId, setAreaId] = useState(initialAreaId);
-  const [selectedPoiId, setSelectedPoiId] = useState<string | null>(initialPlaceId);
+  const [selectedPoiId, setSelectedPoiId] = useState<string | null>(
+    initialPlaceId,
+  );
   const [railOpen, setRailOpen] = useState(true);
   const [aiOn, setAiOn] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
@@ -60,12 +79,25 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
 
   const { state, retry } = useAreaData(areaId);
   const data = state.status === "ready" ? state.data : null;
-  const tour = useMemo(() => (data ? tourOrder(data.pois) : []), [data]);
+  const [filterId, setFilterId] = useState(
+    findFilter(initialFilter)?.id ?? null,
+  );
+  const filter = findFilter(filterId);
+  const shown = useMemo(
+    () => (data ? filterPlaces(data.pois, filter, selectedPoiId) : []),
+    [data, filter, selectedPoiId],
+  );
+  const shownIds = useMemo(() => new Set(shown.map((poi) => poi.id)), [shown]);
+  const tour = useMemo(
+    () => tourOrder(filterPlaces(shown, filter)),
+    [shown, filter],
+  );
   const tourNumbers = useMemo(
     () => new Map(tour.map((poi, index) => [poi.id, index + 1] as const)),
     [tour],
   );
-  const selectedPoi = data?.pois.find((poi) => poi.id === selectedPoiId) ?? null;
+  const selectedPoi =
+    data?.pois.find((poi) => poi.id === selectedPoiId) ?? null;
   const hasAi = Boolean(data?.manifest.ai);
 
   useEffect(() => {
@@ -89,6 +121,11 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
     [updateUrl],
   );
 
+  const changeFilter = (id: string | null) => {
+    setFilterId(id);
+    updateUrl({ filter: id });
+  };
+
   const changeArea = (id: string) => {
     setSelectedPoiId(null);
     setPin(null);
@@ -104,11 +141,16 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
 
   const report = () => {
     const centre = commandsRef.current?.center();
-    const location = data && centre ? imageToLonLat(data.manifest, centre) : null;
+    const location =
+      data && centre ? imageToLonLat(data.manifest, centre) : null;
     const hash = location
       ? `#map=18/${location.lat.toFixed(5)}/${location.lon.toFixed(5)}`
       : "";
-    window.open(`https://www.openstreetmap.org/note/new${hash}`, "_blank", "noopener,noreferrer");
+    window.open(
+      `https://www.openstreetmap.org/note/new${hash}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const openPrivacy = () => {
@@ -140,7 +182,13 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isTyping(event.target)
+      )
+        return;
       if (aboutRef.current?.open) return;
       const key = event.key.toLowerCase();
       if (key === "/") {
@@ -161,7 +209,10 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
   }, [hasAi, animationAvailable, playing, select]);
 
   return (
-    <div className="app" data-rail={railOpen && tour.length > 0 ? "open" : "closed"}>
+    <div
+      className="app"
+      data-rail={railOpen && tour.length > 0 ? "open" : "closed"}
+    >
       <header className="topbar">
         <h1 className="title">
           <button
@@ -194,10 +245,15 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
           {data && data.areas.length > 1 && (
             <label className="tools__area">
               <span className="visually-hidden">{text.mapArea}</span>
-              <select value={data.areaId} onChange={(event) => changeArea(event.target.value)}>
+              <select
+                value={data.areaId}
+                onChange={(event) => changeArea(event.target.value)}
+              >
                 {data.areas.map((area) => (
                   <option key={area.id} value={area.id}>
-                    {lang === "th" && area.name.th ? area.name.th : area.name.en}
+                    {lang === "th" && area.name.th
+                      ? area.name.th
+                      : area.name.en}
                   </option>
                 ))}
               </select>
@@ -249,11 +305,20 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
             <PixelIcon name="share" />
             <span>{text.share}</span>
           </button>
-          <button type="button" className="tool" aria-label={text.reportLabel} onClick={report}>
+          <button
+            type="button"
+            className="tool"
+            aria-label={text.reportLabel}
+            onClick={report}
+          >
             <PixelIcon name="report" />
             <span aria-hidden="true">{text.report}</span>
           </button>
-          <button type="button" className="tool" onClick={() => aboutRef.current?.showModal()}>
+          <button
+            type="button"
+            className="tool"
+            onClick={() => aboutRef.current?.showModal()}
+          >
             <PixelIcon name="about" />
             <span>{text.about}</span>
           </button>
@@ -291,6 +356,7 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
               manifest={data.manifest}
               baseUrl={data.baseUrl}
               pois={data.pois}
+              visibleIds={filter ? shownIds : null}
               selectedPoiId={selectedPoiId}
               onSelectPoi={select}
               aiOn={aiOn}
@@ -310,6 +376,12 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
                 onClose={() => select(null)}
               />
             )}
+            <PlaceFilters
+              places={data.pois}
+              active={filter}
+              lang={lang}
+              onChange={changeFilter}
+            />
             {railOpen && (
               <PlacesRail
                 places={tour}
@@ -334,7 +406,11 @@ export function MapExplorer({ initialAreaId, initialPlaceId }: MapExplorerProps)
                 </span>
               ))}
             </p>
-            <AboutDialog dialogRef={aboutRef} manifest={data.manifest} lang={lang} />
+            <AboutDialog
+              dialogRef={aboutRef}
+              manifest={data.manifest}
+              lang={lang}
+            />
           </>
         )}
         <ConsentBanner lang={lang} onPrivacy={openPrivacy} />

@@ -152,6 +152,11 @@ def render_blocks(
         if inputs_key is not None:
             key_path.write_text(json.dumps({"key": inputs_key}), encoding="utf-8")
     index = FeatureIndex(layers)
+    tallest = max(
+        (properties.get("render_height_m", 0.0) for _, properties in layers.get("buildings", [])),
+        default=0.0,
+    )
+    window_render = dataclasses.replace(render, max_height_m=max(render.max_height_m, tallest))
     background = parse_color(render.palette["background"])
     started = time.monotonic()
     for number, block in enumerate(blocks, start=1):
@@ -160,7 +165,7 @@ def render_blocks(
         ]
         if resume and all(path.exists() for path in outputs):
             continue
-        selected = index.select(ground_window(projection, block, render))
+        selected = index.select(ground_window(projection, block, window_render))
         drawn = render_layers(bounds, render, selected, projection=shifted(projection, block))
         occlusion = np.asarray(drawn["buildings"])[..., 3] > 0
         occlusion |= np.asarray(drawn["vegetation"])[..., 3] > 0

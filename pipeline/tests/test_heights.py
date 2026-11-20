@@ -143,3 +143,35 @@ def test_implausible_osm_values_fall_back_with_a_note(render_config):
     assert derived.render_height_m == render_config.heights.unknown_height_m
     assert "implausible" in derived.note
     assert derive_height("9000 m", None, render_config.heights).height_source != "osm-height"
+
+
+def test_wikidata_height_reads_preferred_metres_and_feet():
+    from pixel_bangkok.heights import FOOT, METRE, wikidata_height
+
+    def claim(amount, unit, rank="normal"):
+        return {
+            "rank": rank,
+            "mainsnak": {"datavalue": {"value": {"amount": amount, "unit": unit}}},
+        }
+
+    assert wikidata_height({"P2048": [claim("+314", METRE)]}) == 314
+    assert wikidata_height({"P2048": [claim("+100", FOOT)]}) == 30.48
+    preferred = {"P2048": [claim("+400", METRE), claim("+304", METRE, "preferred")]}
+    assert wikidata_height(preferred) == 304
+    assert wikidata_height({"P2048": [claim("+50", METRE, "deprecated")]}) is None
+    assert wikidata_height({}) is None
+
+
+def test_wikidata_height_beats_levels_and_raster_but_not_osm_height(render_config):
+    from pixel_bangkok.heights import RasterSample, WikidataHeight, derive_height
+
+    linked = WikidataHeight(314.0, "Q1640197")
+    raster = RasterSample(99.5, 400, "raster")
+    derived = derive_height(None, "77", render_config.heights, None, raster, linked)
+    assert (derived.render_height_m, derived.height_source) == (314.0, "wikidata")
+    assert "Q1640197" in derived.note
+    assert derive_height(
+        "300", None, render_config.heights, None, raster, linked
+    ).height_source == ("osm-height")
+    capped = derive_height(None, None, render_config.heights, None, raster)
+    assert "ceiling" in capped.note

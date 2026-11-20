@@ -76,6 +76,8 @@ const en = {
   aiOffLabel: "Show AI art",
   trafficOnLabel: "Pause traffic and boats",
   trafficOffLabel: "Play traffic and boats",
+  filterLabel: "Show places by type",
+  filterAll: "All",
   consentTitle: "Cookies",
   consentText:
     "May we use analytics cookies to count visits and improve the map? Nothing is stored until you allow it.",
@@ -197,6 +199,8 @@ const th: Strings = {
   aiOffLabel: "ดูภาพ AI",
   trafficOnLabel: "หยุดรถและเรือ",
   trafficOffLabel: "เล่นรถและเรือ",
+  filterLabel: "แสดงสถานที่ตามประเภท",
+  filterAll: "ทั้งหมด",
   consentTitle: "คุกกี้",
   consentText:
     "ขออนุญาตใช้คุกกี้วิเคราะห์เพื่อนับการเข้าชมและปรับปรุงแผนที่ จะไม่มีการจัดเก็บใด ๆ จนกว่าคุณจะอนุญาต",

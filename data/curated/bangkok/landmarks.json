@@ -32,6 +32,69 @@
       "roof_shape": "prang",
       "note": "Manual drawing choice: one of the four satellite prangs around the central prang (OSM tags it a temple pagoda). Height is not overridden.",
       "reference_url": "https://www.openstreetmap.org/way/1148151957"
+    },
+    {
+      "source_id": "relation/18728184",
+      "name_en": "Baiyoke Tower II",
+      "height_m": 304,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 3, retrieved 2026-11-20) gives 304 m, 85 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/1320414578",
+      "name_en": "Four Seasons Private Residences",
+      "height_m": 299.5,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 4, retrieved 2026-11-20) gives 299.5 m, 73 floors; matched to this OSM building by listed as Four Seasons Private Residences Bangkok. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/1266545784",
+      "name_en": "Dusit Residences",
+      "height_m": 299.1,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 4=, retrieved 2026-11-20) gives 299.1 m, 69 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/518606268",
+      "name_en": "Menam Residences",
+      "height_m": 239.3,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 18, retrieved 2026-11-20) gives 239.3 m, 59 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/401358382",
+      "name_en": "The Esse Asoke",
+      "height_m": 236.8,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 19, retrieved 2026-11-20) gives 236.8 m, 55 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/342271323",
+      "name_en": "Jewelry Trade Center",
+      "height_m": 220.7,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 26, retrieved 2026-11-20) gives 220.7 m, 59 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/1220217095",
+      "name_en": "Supalai Icon Sathon",
+      "height_m": 213.9,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 30, retrieved 2026-11-20) gives 213.9 m, 57 floors; matched to this OSM building by listed as Supalai Icon Sathorn. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/27644099",
+      "name_en": "CRC Tower",
+      "height_m": 210,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 33, retrieved 2026-11-20) gives 210 m, 53 floors; matched to this OSM building by listed as China Resources Tower (CRC Tower). OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/1194035344",
+      "name_en": "Park Silom",
+      "height_m": 204,
+      "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 35=, retrieved 2026-11-20) gives 204 m, 38 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
+      "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
     }
   ]
 }

@@ -1,9 +1,21 @@
 "use client";
 
 import type OpenSeadragon from "openseadragon";
-import { type CSSProperties, type RefObject, useEffect, useId, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type RefObject,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 
-import { imageToViewport, type Point, tileSourceOptions, viewportToImage } from "@/lib/coords";
+import {
+  imageToViewport,
+  type Point,
+  tileSourceOptions,
+  viewportToImage,
+} from "@/lib/coords";
 import { type Lang, placeName, STRINGS } from "@/lib/i18n";
 import type { PointOfInterest, TileManifest } from "@/lib/manifest";
 import { parseMotion } from "@/lib/motion";
@@ -37,6 +49,8 @@ interface MapViewerProps {
   showLabels: boolean;
   lang: Lang;
   tourNumbers: Map<string, number>;
+  /** When set, only these places get pins (category filter); null shows all. */
+  visibleIds?: Set<string> | null;
   commandsRef: RefObject<MapCommands | null>;
   onAnimationAvailable: (available: boolean) => void;
   pin: Point | null;
@@ -55,7 +69,10 @@ const TILE_RETRY_DELAY_MS = 1200;
  * this message; real errors read "...aborted or errored out" or mention a timeout. */
 const CANCELLED = "Image load aborted.";
 
-function isRealFailure(event: { message?: string; maxReached?: boolean }): boolean {
+function isRealFailure(event: {
+  message?: string;
+  maxReached?: boolean;
+}): boolean {
   if (event.maxReached === false) return false;
   return event.message !== CANCELLED;
 }
@@ -71,16 +88,20 @@ function layerVersion(manifest: TileManifest, aiOn: boolean): string {
 }
 
 function baseTemplate(manifest: TileManifest, aiOn: boolean): string {
-  return aiOn && manifest.ai ? manifest.ai.urlTemplate : manifest.tiles.urlTemplate;
+  return aiOn && manifest.ai
+    ? manifest.ai.urlTemplate
+    : manifest.tiles.urlTemplate;
 }
 
 function overlayTemplate(manifest: TileManifest, aiOn: boolean): string | null {
-  if (aiOn && manifest.ai?.overlayUrlTemplate) return manifest.ai.overlayUrlTemplate;
+  if (aiOn && manifest.ai?.overlayUrlTemplate)
+    return manifest.ai.overlayUrlTemplate;
   return manifest.animation?.overlayUrlTemplate ?? null;
 }
 
 function frontTemplate(manifest: TileManifest, aiOn: boolean): string | null {
-  if (aiOn && manifest.ai?.frontOverlayUrlTemplate) return manifest.ai.frontOverlayUrlTemplate;
+  if (aiOn && manifest.ai?.frontOverlayUrlTemplate)
+    return manifest.ai.frontOverlayUrlTemplate;
   return manifest.animation?.frontUrlTemplate ?? null;
 }
 
@@ -101,6 +122,7 @@ export function MapViewer({
   showLabels,
   lang,
   tourNumbers,
+  visibleIds = null,
   commandsRef,
   onAnimationAvailable,
   pin,
@@ -188,13 +210,20 @@ export function MapViewer({
           },
           home: () => current.viewport.goHome(),
           center: () =>
-            current.isOpen() ? viewportToImage(current.viewport.getCenter(true), manifest.image) : null,
+            current.isOpen()
+              ? viewportToImage(
+                  current.viewport.getCenter(true),
+                  manifest.image,
+                )
+              : null,
           goTo: (point) => goToImage(point),
         };
 
         const positionMarkers = () => {
           if (!current.isOpen()) return;
-          const imageZoom = current.viewport.viewportToImageZoom(current.viewport.getZoom(true));
+          const imageZoom = current.viewport.viewportToImageZoom(
+            current.viewport.getZoom(true),
+          );
           container.parentElement?.setAttribute(
             "data-detail",
             imageZoom < COMPACT_MARKER_ZOOM ? "compact" : "full",
@@ -228,12 +257,20 @@ export function MapViewer({
           if (!current.isOpen()) return;
           const location = imageToViewport(point, manifest.image);
           const viewport = current.viewport;
-          const zoom = Math.max(viewport.getZoom(), viewport.imageToViewportZoom(FOCUS_IMAGE_ZOOM));
+          const zoom = Math.max(
+            viewport.getZoom(),
+            viewport.imageToViewportZoom(FOCUS_IMAGE_ZOOM),
+          );
           const bounds = viewport.getBounds();
           const width = 1 / zoom;
           const height = width * (bounds.height / bounds.width);
           viewport.fitBounds(
-            new OSD.Rect(location.x - width / 2, location.y - height / 2, width, height),
+            new OSD.Rect(
+              location.x - width / 2,
+              location.y - height / 2,
+              width,
+              height,
+            ),
             prefersReducedMotion(),
           );
         };
@@ -250,7 +287,9 @@ export function MapViewer({
         let smoothing: boolean | null = null;
         const updateSmoothing = () => {
           if (!current.isOpen()) return;
-          const imageZoom = current.viewport.viewportToImageZoom(current.viewport.getZoom(true));
+          const imageZoom = current.viewport.viewportToImageZoom(
+            current.viewport.getZoom(true),
+          );
           const wanted = imageZoom < 1;
           if (wanted === smoothing) return;
           smoothing = wanted;
@@ -262,7 +301,9 @@ export function MapViewer({
         current.addHandler("resize", positionMarkers);
         const navigatorElement = document.getElementById(navigatorId);
         if (navigatorElement && typeof ResizeObserver !== "undefined") {
-          navigatorObserver = new ResizeObserver(() => current.navigator?.updateSize());
+          navigatorObserver = new ResizeObserver(() =>
+            current.navigator?.updateSize(),
+          );
           navigatorObserver.observe(navigatorElement);
         }
         current.addHandler("open-failed", () => setStatus("error"));
@@ -307,7 +348,11 @@ export function MapViewer({
           });
           const sync = () => {
             if (!follower.isOpen()) return;
-            follower.viewport.zoomTo(current.viewport.getZoom(true), undefined, true);
+            follower.viewport.zoomTo(
+              current.viewport.getZoom(true),
+              undefined,
+              true,
+            );
             follower.viewport.panTo(current.viewport.getCenter(true), true);
           };
           current.addHandler("viewport-change", sync);
@@ -327,7 +372,9 @@ export function MapViewer({
           front = follow(frontRef.current, frontTemplateValue);
           frontViewerRef.current = front;
         }
-        loadMotion(`${baseUrl}/${animation.motionUrl}?v=${manifest.contentVersion}`)
+        loadMotion(
+          `${baseUrl}/${animation.motionUrl}?v=${manifest.contentVersion}`,
+        )
           .then((motion) => {
             if (cancelled) return;
             const traffic = new TrafficLayer(
@@ -344,7 +391,9 @@ export function MapViewer({
             canvas.dataset.vehicles = String(traffic.vehicleCount);
             availableRef.current(true);
           })
-          .catch((error: unknown) => console.warn("Animation unavailable", error));
+          .catch((error: unknown) =>
+            console.warn("Animation unavailable", error),
+          );
       })
       .catch((error: unknown) => {
         console.error("Failed to start the map viewer", error);
@@ -370,7 +419,10 @@ export function MapViewer({
   useEffect(() => {
     if (aiOnRef.current === aiOn) return;
     aiOnRef.current = aiOn;
-    const swap = (viewer: OpenSeadragon.Viewer | null, template: string | null) => {
+    const swap = (
+      viewer: OpenSeadragon.Viewer | null,
+      template: string | null,
+    ) => {
       if (!viewer || !template || !viewer.isOpen()) return;
       const previous = viewer.world.getItemAt(0);
       viewer.addTiledImage({
@@ -407,7 +459,11 @@ export function MapViewer({
   }, [selectedPoiId]);
 
   return (
-    <div className="map" data-status={status} data-labels={showLabels ? "on" : "off"}>
+    <div
+      className="map"
+      data-status={status}
+      data-labels={showLabels ? "on" : "off"}
+    >
       <div
         ref={containerRef}
         className="map__canvas"
@@ -419,42 +475,56 @@ export function MapViewer({
         }
       />
 
-      <canvas ref={animationRef} className="map__animation" aria-hidden="true" />
+      <canvas
+        ref={animationRef}
+        className="map__animation"
+        aria-hidden="true"
+      />
       <div ref={overlayRef} className="map__overlay" aria-hidden="true" />
-      <canvas ref={upperRef} className="map__animation map__animation--upper" aria-hidden="true" />
-      <div ref={frontRef} className="map__overlay map__overlay--front" aria-hidden="true" />
+      <canvas
+        ref={upperRef}
+        className="map__animation map__animation--upper"
+        aria-hidden="true"
+      />
+      <div
+        ref={frontRef}
+        className="map__overlay map__overlay--front"
+        aria-hidden="true"
+      />
 
       <div className="map__markers">
-        {pois.map((poi) => {
-          const category = categoryInfo(poi.category);
-          const selected = poi.id === selectedPoiId;
-          const number = tourNumbers.get(poi.id);
-          const names = placeName(poi, lang);
-          return (
-            <button
-              key={poi.id}
-              ref={(element) => {
-                if (element) markerRefs.current.set(poi.id, element);
-                else markerRefs.current.delete(poi.id);
-              }}
-              type="button"
-              className="marker"
-              data-category={poi.category}
-              data-poi-id={poi.id}
-              data-tour={number !== undefined ? "yes" : "no"}
-              aria-pressed={selected}
-              aria-label={`${number !== undefined ? `${number}. ` : ""}${names.primary}, ${category.label}`}
-              onClick={() => onSelectPoi(poi.id)}
-            >
-              <span className="marker__pin" aria-hidden="true">
-                {number ?? category.glyph}
-              </span>
-              <span className="marker__label" aria-hidden="true">
-                {names.primary}
-              </span>
-            </button>
-          );
-        })}
+        {(visibleIds ? pois.filter((poi) => visibleIds.has(poi.id)) : pois).map(
+          (poi) => {
+            const category = categoryInfo(poi.category);
+            const selected = poi.id === selectedPoiId;
+            const number = tourNumbers.get(poi.id);
+            const names = placeName(poi, lang);
+            return (
+              <button
+                key={poi.id}
+                ref={(element) => {
+                  if (element) markerRefs.current.set(poi.id, element);
+                  else markerRefs.current.delete(poi.id);
+                }}
+                type="button"
+                className="marker"
+                data-category={poi.category}
+                data-poi-id={poi.id}
+                data-tour={number !== undefined ? "yes" : "no"}
+                aria-pressed={selected}
+                aria-label={`${number !== undefined ? `${number}. ` : ""}${names.primary}, ${category.label}`}
+                onClick={() => onSelectPoi(poi.id)}
+              >
+                <span className="marker__pin" aria-hidden="true">
+                  {number ?? category.glyph}
+                </span>
+                <span className="marker__label" aria-hidden="true">
+                  {names.primary}
+                </span>
+              </button>
+            );
+          },
+        )}
       </div>
 
       <div ref={pinRef} className="map__pin" hidden={!pin}>
@@ -475,19 +545,33 @@ export function MapViewer({
       </div>
 
       <div className="map__zoom" role="group" aria-label={text.zoomGroup}>
-        <button type="button" aria-label={text.zoomIn} onClick={() => commandsRef.current?.zoomBy(1.5)}>
+        <button
+          type="button"
+          aria-label={text.zoomIn}
+          onClick={() => commandsRef.current?.zoomBy(1.5)}
+        >
           <span aria-hidden="true">+</span>
         </button>
-        <button type="button" aria-label={text.zoomOut} onClick={() => commandsRef.current?.zoomBy(1 / 1.5)}>
+        <button
+          type="button"
+          aria-label={text.zoomOut}
+          onClick={() => commandsRef.current?.zoomBy(1 / 1.5)}
+        >
           <span aria-hidden="true">−</span>
         </button>
-        <button type="button" aria-label={text.home} onClick={() => commandsRef.current?.home()}>
+        <button
+          type="button"
+          aria-label={text.home}
+          onClick={() => commandsRef.current?.home()}
+        >
           <span aria-hidden="true">⌂</span>
         </button>
         {fullscreen.available && (
           <button
             type="button"
-            aria-label={fullscreen.active ? text.exitFullscreen : text.fullscreen}
+            aria-label={
+              fullscreen.active ? text.exitFullscreen : text.fullscreen
+            }
             aria-pressed={fullscreen.active}
             onClick={toggleFullscreen}
           >

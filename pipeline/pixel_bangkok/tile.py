@@ -486,8 +486,10 @@ def run(
     if animation:
         manifest["animation"] = animation
     summary_path = build_dir / "ai" / "summary.json"
-    if has_ai and summary_path.exists():
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary = (
+        json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else None
+    )
+    if has_ai and summary and summary["coverage"] > 0:
         manifest["ai"] = {
             "url_template": "ai/{level}/{column}_{row}.{format}",
             "overlay_url_template": "ai_overlay/{level}/{column}_{row}.{format}"
