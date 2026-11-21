@@ -4,7 +4,7 @@
 
 Build Pixel Bangkok: a geographically grounded, interactive isometric pixel-art exploration of Bangkok.
 
-Read `SPEC.md` and `AGENTS.md` before making changes. `SPEC.md` is the product and architecture source of truth. `AGENTS.md` contains engineering and repository rules.
+Read `SPEC.md` and `AGENTS.md` before making changes. `SPEC.md` is the product and architecture source of truth. `AGENTS.md` contains engineering and repository rules. `SPEC.md` lives at `docs/SPEC.md`; `docs/` (including `docs/decisions/`) holds private working notes kept out of the repository by `.gitignore`; if they are missing, work from this file, `AGENTS.md` and the code, and never commit them.
 
 ## How to work
 

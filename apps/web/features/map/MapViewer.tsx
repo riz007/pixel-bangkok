@@ -145,6 +145,7 @@ export function MapViewer({
   const navigatorId = `map-navigator-${useId().replace(/:/g, "")}`;
   const [status, setStatus] = useState<ViewerStatus>("loading");
   const [failedTiles, setFailedTiles] = useState(0);
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
   const playingRef = useRef(playing);
   const aiOnRef = useRef(aiOn);
   const selectedRef = useRef(selectedPoiId);
@@ -358,6 +359,7 @@ export function MapViewer({
           current.addHandler("viewport-change", sync);
           current.addHandler("resize", sync);
           follower.addHandler("open", sync);
+          follower.addHandler("resize", sync);
           followers.push(follower);
           smoothing = null;
           return follower;
@@ -590,9 +592,17 @@ export function MapViewer({
           {text.mapUnavailable}. {text.mapUnavailableHint}
         </p>
       )}
-      {status === "ready" && failedTiles > 0 && (
+      {status === "ready" && failedTiles > 0 && !noticeDismissed && (
         <p className="map__notice" role="status">
           {text.tilesFailed}
+          <button
+            type="button"
+            className="map__notice-close"
+            aria-label={text.dismiss}
+            onClick={() => setNoticeDismissed(true)}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
         </p>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const TILE_URL = /\/maps\/wat-arun\/tiles\/\d+\/\d+_\d+\.webp(\?v=\w+)?$/;
+const TILE_URL =
+  /\/maps\/wat-arun\/(tiles|ai)\/\d+\/\d+_\d+\.webp(\?v=[\w-]+)?$/;
 const PRANG = '[data-poi-id="wat-arun-central-prang"]';
 const TEMPLE_COLOURS = [
   "243,234,214",
@@ -15,6 +16,11 @@ const TEMPLE_COLOURS = [
 async function openMap(page: Page) {
   await page.goto("/?area=wat-arun");
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+}
+
+async function showPlainDrawing(page: Page) {
+  const plain = page.getByRole("button", { name: "Show the plain drawing" });
+  if (await plain.count()) await plain.click();
 }
 
 async function markerAnchor(page: Page, selector: string) {
@@ -60,7 +66,7 @@ test("loads tiles for the visible area only, never the master image", async ({
     0,
   );
   const mapRequests = requests.filter((path) =>
-    path.startsWith("/maps/wat-arun/tiles/"),
+    /^\/maps\/wat-arun\/(tiles|ai)\//.test(path),
   );
   expect(mapRequests.length).toBeGreaterThan(0);
   expect(mapRequests.length).toBeLessThan(totalTiles / 2);
@@ -94,6 +100,7 @@ test("POI marker stays on its landmark while zooming and panning", async ({
 }) => {
   const onTemple = new RegExp(`^(${TEMPLE_COLOURS.join("|")})$`);
   await openMap(page);
+  await showPlainDrawing(page);
   await page.locator(PRANG).click();
   for (let step = 0; step < 6; step += 1) {
     await page.getByRole("button", { name: "Zoom in" }).click();
@@ -201,8 +208,9 @@ test("shows a fallback with retry when map data is unavailable", async ({
 });
 
 test("shows an error when tiles fail to load", async ({ page }) => {
-  await page.route(TILE_URL, (route) =>
-    route.fulfill({ status: 500, body: "" }),
+  await page.route(
+    /\/maps\/wat-arun\/[a-z_]+\/\d+\/\d+_\d+\.webp(\?v=[\w-]+)?$/,
+    (route) => route.fulfill({ status: 500, body: "" }),
   );
   await page.goto("/?area=wat-arun");
   // Tiles are retried three times before the viewer gives up.
@@ -449,4 +457,34 @@ test("place filters narrow the pins and the places strip and are shareable", asy
   await filters.getByRole("button", { name: /^All/ }).click();
   await expect(page.locator(".marker")).toHaveCount(all);
   await expect(page).not.toHaveURL(/filter=/);
+});
+
+test("hiding places also hides the filters, and phone credits collapse to OpenStreetMap", async ({
+  page,
+  isMobile,
+}) => {
+  await openMap(page);
+  const filters = page.getByRole("group", { name: "Show places by type" });
+  await expect(filters).toBeVisible();
+  await page.getByRole("button", { name: "Places", exact: true }).click();
+  await expect(filters).toHaveCount(0);
+  const credit = page.locator(".credit");
+  await expect(
+    credit.getByRole("link", { name: /OpenStreetMap/ }),
+  ).toBeVisible();
+  const more = credit.getByRole("link", { name: /Tree canopy/ });
+  if (isMobile) {
+    await expect(more).toBeHidden();
+    await credit.getByRole("button", { name: "Show all map credits" }).click();
+  }
+  await expect(more).toBeVisible();
+});
+
+test("About shows the Isometric Cities badge", async ({ page }) => {
+  await openMap(page);
+  await page.getByRole("button", { name: "About", exact: true }).click();
+  const badge = page.getByRole("link", {
+    name: "Featured on Isometric Cities",
+  });
+  await expect(badge).toHaveAttribute("href", "https://isometriccities.com/");
 });

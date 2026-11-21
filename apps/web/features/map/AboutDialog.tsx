@@ -3,9 +3,9 @@
 import type { RefObject } from "react";
 
 import { ANALYTICS_ENABLED, openConsent } from "@/lib/consent";
-import { CONTACT_EMAIL, PRIVACY_ID } from "@/lib/site";
 import { FULL_NAME_ROMAN, FULL_NAME_TH, type Lang, STRINGS } from "@/lib/i18n";
 import type { TileManifest } from "@/lib/manifest";
+import { CONTACT_EMAIL, PRIVACY_ID } from "@/lib/site";
 
 interface AboutDialogProps {
   dialogRef: RefObject<HTMLDialogElement | null>;
@@ -48,7 +48,12 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
       <h3>{text.howMadeTitle}</h3>
       <p>{text.howMade}</p>
       {manifest.ai && (
-        <p>{text.aiNote(manifest.ai.model, Math.max(1, Math.round(manifest.ai.coverage * 100)))}</p>
+        <p>
+          {text.aiNote(
+            manifest.ai.model,
+            Math.max(1, Math.round(manifest.ai.coverage * 100)),
+          )}
+        </p>
       )}
 
       <h3>{text.shortcutsTitle}</h3>
@@ -85,11 +90,31 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
         ))}
         {manifest.ai && (
           <li>
-            {manifest.ai.model} <span className="about__licence">({manifest.ai.licence})</span>
+            {manifest.ai.model}{" "}
+            <span className="about__licence">({manifest.ai.licence})</span>
           </li>
         )}
-        {retrieved && <li className="about__licence">OpenStreetMap {retrieved}</li>}
+        {retrieved && (
+          <li className="about__licence">OpenStreetMap {retrieved}</li>
+        )}
       </ul>
+      <p className="about__badge">
+        <a
+          href="https://isometriccities.com/"
+          target="_blank"
+          rel="noopener"
+          title="Featured on Isometric Cities"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- third-party badge, served as-is */}
+          <img
+            src="https://isometriccities.com/badge.svg"
+            alt="Featured on Isometric Cities"
+            width={200}
+            height={48}
+            loading="lazy"
+          />
+        </a>
+      </p>
       <section className="about__privacy-notice" aria-labelledby={PRIVACY_ID}>
         <h3 id={PRIVACY_ID} tabIndex={-1}>
           {text.privacyTitle}

@@ -1390,3 +1390,157 @@ kbd {
     transform: none;
   }
 }
+
+.app[data-rail="closed"] {
+  --filters-height: 0px;
+}
+
+.credit__toggle {
+  display: none;
+}
+
+.map__notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.map__notice-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--gold);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.map__notice-close:focus-visible,
+.credit__toggle:focus-visible {
+  outline: 2px solid var(--marigold);
+  outline-offset: 2px;
+}
+
+.about__badge {
+  margin: 16px 0 4px;
+}
+
+.about__badge img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    inset: 6px 6px auto;
+    gap: 6px;
+  }
+
+  .title__plate {
+    padding: 3px 10px 4px;
+  }
+
+  .title__th {
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+
+  .title__en {
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  .search {
+    z-index: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .search__key {
+    display: none;
+  }
+
+  .search__results {
+    left: auto;
+    width: calc(100vw - 12px);
+  }
+
+  .tools {
+    padding: 3px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+
+  .tool {
+    min-width: 46px;
+    min-height: 40px;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+  }
+
+  .tools__area select {
+    max-width: 128px;
+    height: 34px;
+  }
+
+  .map__zoom button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .map__notice {
+    top: auto;
+    bottom: calc(var(--rail-height, 0px) + var(--filters-height) + 40px);
+    width: max-content;
+    max-width: calc(100% - 24px);
+    padding: 6px 6px 6px 12px;
+    font-size: 0.78rem;
+  }
+
+  .credit {
+    left: 6px;
+    max-width: calc(100% - 70px);
+    font-size: 0.65rem;
+  }
+
+  .credit[data-open="false"] .credit__more {
+    display: none;
+  }
+
+  .credit__toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    margin-left: 6px;
+    border: 1px solid var(--gold-dim);
+    border-radius: 999px;
+    background: none;
+    color: var(--gold);
+    font-size: 0.85rem;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  .app[data-rail="open"] {
+    --rail-height: 150px;
+  }
+
+  .plate {
+    width: 136px;
+  }
+
+  .plate__image {
+    height: 60px;
+  }
+
+  .consent {
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    z-index: 7;
+    padding: 12px 14px 10px;
+  }
+}

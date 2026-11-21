@@ -16,7 +16,8 @@ const en = {
   exitFullscreen: "Exit full screen",
   northArrow: "North arrow",
   searchNoResults: "No places match. Try a Thai or English name.",
-  resultsCount: (n: number) => (n === 1 ? "1 place found" : `${n} places found`),
+  resultsCount: (n: number) =>
+    n === 1 ? "1 place found" : `${n} places found`,
   places: "Places",
   aiArt: "AI art",
   labels: "Labels",
@@ -47,6 +48,9 @@ const en = {
     "Map files are missing or unreachable. Check your connection and try again.",
   tryAgain: "Try again",
   tilesFailed: "Some parts of the map did not load and may look blurry.",
+  dismiss: "Dismiss",
+  creditsMore: "Show all map credits",
+  creditsLess: "Hide map credits",
   aboutTitle: "About this map",
   aboutIntro:
     "Bangkok as one pixel-art map you can explore street by street: temples, canals, markets and the river, drawn from open data.",
@@ -167,9 +171,13 @@ const th: Strings = {
   loadingMap: "กำลังโหลดแผนที่",
   loadingTiles: "กำลังวาดเมือง",
   mapUnavailable: "โหลดแผนที่ไม่สำเร็จ",
-  mapUnavailableHint: "ไม่พบไฟล์แผนที่หรือเชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง",
+  mapUnavailableHint:
+    "ไม่พบไฟล์แผนที่หรือเชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง",
   tryAgain: "ลองอีกครั้ง",
   tilesFailed: "บางส่วนของแผนที่โหลดไม่สำเร็จ อาจดูไม่คมชัด",
+  dismiss: "ปิด",
+  creditsMore: "แสดงที่มาของข้อมูลแผนที่ทั้งหมด",
+  creditsLess: "ซ่อนที่มาของข้อมูลแผนที่",
   aboutTitle: "เกี่ยวกับแผนที่นี้",
   aboutIntro:
     "กรุงเทพฯ ทั้งเมืองในภาพพิกเซลอาร์ตที่ซูมเที่ยวได้ทุกตรอกซอกซอย ทั้งวัด คลอง ตลาด และแม่น้ำเจ้าพระยา วาดจากข้อมูลเปิด",
@@ -256,16 +264,27 @@ export const FULL_NAME_ROMAN =
   "Krung Thep Mahanakhon Amon Rattanakosin Mahinthara Ayuthaya Mahadilok Phop Noppharat Ratchathani Burirom Udomratchaniwet Mahasathan Amon Piman Awatan Sathit Sakkathattiya Witsanukam Prasit";
 
 export function detectLang(languages: readonly string[]): Lang {
-  return languages.some((code) => code.toLowerCase().startsWith("th")) ? "th" : "en";
+  return languages.some((code) => code.toLowerCase().startsWith("th"))
+    ? "th"
+    : "en";
 }
 
-export function lineLabel(line: { en: string; th: string; code: string }, lang: Lang) {
+export function lineLabel(
+  line: { en: string; th: string; code: string },
+  lang: Lang,
+) {
   const name = lang === "th" ? line.th : line.en;
   return line.code ? `${name} · ${line.code}` : name;
 }
 
-export function placeName(poi: { nameEn: string; nameTh: string | null }, lang: Lang) {
+export function placeName(
+  poi: { nameEn: string; nameTh: string | null },
+  lang: Lang,
+) {
   const primary = lang === "th" && poi.nameTh ? poi.nameTh : poi.nameEn;
   const secondary = lang === "th" ? poi.nameEn : poi.nameTh;
-  return { primary, secondary: secondary && secondary !== primary ? secondary : null };
+  return {
+    primary,
+    secondary: secondary && secondary !== primary ? secondary : null,
+  };
 }

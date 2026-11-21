@@ -61,6 +61,7 @@ export function MapExplorer({
     initialPlaceId,
   );
   const [railOpen, setRailOpen] = useState(true);
+  const [creditsOpen, setCreditsOpen] = useState(false);
   const [aiOn, setAiOn] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
   const [animationAvailable, setAnimationAvailable] = useState(false);
@@ -376,12 +377,14 @@ export function MapExplorer({
                 onClose={() => select(null)}
               />
             )}
-            <PlaceFilters
-              places={data.pois}
-              active={filter}
-              lang={lang}
-              onChange={changeFilter}
-            />
+            {railOpen && (
+              <PlaceFilters
+                places={data.pois}
+                active={filter}
+                lang={lang}
+                onChange={changeFilter}
+              />
+            )}
             {railOpen && (
               <PlacesRail
                 places={tour}
@@ -396,15 +399,29 @@ export function MapExplorer({
                 onSelect={select}
               />
             )}
-            <p className="credit">
+            <p className="credit" data-open={creditsOpen}>
               {data.manifest.attributions.map((attribution, index) => (
-                <span key={attribution.url}>
+                <span
+                  key={attribution.url}
+                  className={index > 0 ? "credit__more" : undefined}
+                >
                   {index > 0 && ", "}
                   <a href={attribution.url} target="_blank" rel="noreferrer">
                     {attribution.text}
                   </a>
                 </span>
               ))}
+              {data.manifest.attributions.length > 1 && (
+                <button
+                  type="button"
+                  className="credit__toggle"
+                  aria-expanded={creditsOpen}
+                  aria-label={creditsOpen ? text.creditsLess : text.creditsMore}
+                  onClick={() => setCreditsOpen(!creditsOpen)}
+                >
+                  <span aria-hidden="true">{creditsOpen ? "−" : "+"}</span>
+                </button>
+              )}
             </p>
             <AboutDialog
               dialogRef={aboutRef}
