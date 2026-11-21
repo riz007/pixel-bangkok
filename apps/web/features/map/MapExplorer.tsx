@@ -17,6 +17,7 @@ import { tourOrder } from "@/lib/tour";
 
 import { AboutDialog } from "./AboutDialog";
 import { ConsentBanner } from "./ConsentBanner";
+import { FeaturedBadge } from "./FeaturedBadge";
 import { toggleFullscreen } from "./fullscreen";
 import { PixelIcon } from "./icons";
 import { type MapCommands, MapViewer } from "./MapViewer";
@@ -63,6 +64,7 @@ export function MapExplorer({
   const [railOpen, setRailOpen] = useState(true);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [aiOn, setAiOn] = useState(true);
+  const [aiHint, setAiHint] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [animationAvailable, setAnimationAvailable] = useState(false);
   const reducedMotion = useSyncExternalStore(
@@ -128,10 +130,29 @@ export function MapExplorer({
   };
 
   const changeArea = (id: string) => {
+    setAiHint(false);
     setSelectedPoiId(null);
     setPin(null);
     setAreaId(id);
     updateUrl({ area: id, place: null });
+  };
+
+  const aiPartial = (data?.manifest.ai?.coverage ?? 1) < 0.5;
+  const aiFocus = data?.manifest.ai?.focus ?? null;
+
+  const toggleAi = useCallback(() => {
+    setAiOn((on) => !on);
+    if (aiPartial) setAiHint(true);
+  }, [aiPartial]);
+
+  const showAiArea = () => {
+    const point =
+      data && aiFocus
+        ? lonLatToImage(data.manifest, aiFocus.lon, aiFocus.lat)
+        : null;
+    setAiOn(true);
+    setAiHint(false);
+    if (point) commandsRef.current?.goTo(point);
   };
 
   const goTo = (point: Point) => {
@@ -196,7 +217,7 @@ export function MapExplorer({
         event.preventDefault();
         searchRef.current?.focus();
       } else if (key === "p") setRailOpen((open) => !open);
-      else if (key === "a" && hasAi) setAiOn((on) => !on);
+      else if (key === "a" && hasAi) toggleAi();
       else if (key === "l") setShowLabels((on) => !on);
       else if (key === "t" && animationAvailable) setPlayChoice(!playing);
       else if (key === "f") toggleFullscreen();
@@ -207,7 +228,7 @@ export function MapExplorer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasAi, animationAvailable, playing, select]);
+  }, [hasAi, animationAvailable, playing, select, toggleAi]);
 
   return (
     <div
@@ -275,7 +296,7 @@ export function MapExplorer({
               className="tool"
               aria-pressed={aiOn}
               aria-label={aiOn ? text.aiOnLabel : text.aiOffLabel}
-              onClick={() => setAiOn(!aiOn)}
+              onClick={toggleAi}
             >
               <PixelIcon name="ai" />
               <span aria-hidden="true">{text.aiArt}</span>
@@ -430,7 +451,34 @@ export function MapExplorer({
             />
           </>
         )}
+        {data && !selectedPoi && <FeaturedBadge lang={lang} />}
         <ConsentBanner lang={lang} onPrivacy={openPrivacy} />
+        {aiHint && data?.manifest.ai && (
+          <div className="ai-hint" role="status">
+            <p>
+              {text.aiPartial(
+                Math.max(1, Math.round(data.manifest.ai.coverage * 100)),
+              )}
+            </p>
+            {aiFocus && (
+              <button
+                type="button"
+                className="ai-hint__show"
+                onClick={showAiArea}
+              >
+                {text.aiShowArea}
+              </button>
+            )}
+            <button
+              type="button"
+              className="ai-hint__close"
+              aria-label={text.dismiss}
+              onClick={() => setAiHint(false)}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+        )}
         <p className="toast" role="status" aria-live="polite">
           {toast}
         </p>

@@ -20,7 +20,11 @@ async function openMap(page: Page) {
 
 async function showPlainDrawing(page: Page) {
   const plain = page.getByRole("button", { name: "Show the plain drawing" });
-  if (await plain.count()) await plain.click();
+  if (!(await plain.count())) return;
+  await plain.click();
+  const hint = page.locator(".ai-hint");
+  if (await hint.count())
+    await hint.getByRole("button", { name: "Dismiss" }).click();
 }
 
 async function markerAnchor(page: Page, selector: string) {
@@ -483,8 +487,40 @@ test("hiding places also hides the filters, and phone credits collapse to OpenSt
 test("About shows the Isometric Cities badge", async ({ page }) => {
   await openMap(page);
   await page.getByRole("button", { name: "About", exact: true }).click();
-  const badge = page.getByRole("link", {
+  const badge = page.locator(".about__badge").getByRole("link", {
     name: "Featured on Isometric Cities",
   });
   await expect(badge).toHaveAttribute("href", "https://isometriccities.com/");
+});
+
+test("AI toggle explains partial coverage and can fly to the painted area", async ({
+  page,
+}) => {
+  await openMap(page);
+  const manifest = await (
+    await page.request.get("/maps/wat-arun/manifest.json")
+  ).json();
+  test.skip(
+    !manifest.ai || manifest.ai.coverage >= 0.5,
+    "AI layer absent or mostly complete",
+  );
+  await page.getByRole("button", { name: "Show the plain drawing" }).click();
+  const hint = page.locator(".ai-hint");
+  await expect(hint).toContainText("AI art covers about");
+  await hint.getByRole("button", { name: "Show painted area" }).click();
+  await expect(hint).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Show the plain drawing" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("the Isometric Cities badge shows on the map and stays hidden once dismissed", async ({ page }) => {
+  await openMap(page);
+  const badge = page.locator(".featured");
+  await expect(badge.getByRole("link")).toHaveAttribute("href", "https://isometriccities.com/cities/bangkok/");
+  await badge.getByRole("button", { name: "Hide the Isometric Cities badge" }).click();
+  await expect(badge).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  await expect(badge).toHaveCount(0);
 });

@@ -107,7 +107,7 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- third-party badge, served as-is */}
           <img
-            src="https://isometriccities.com/badge.svg"
+            src="/isometric-cities-badge.svg"
             alt="Featured on Isometric Cities"
             width={200}
             height={48}

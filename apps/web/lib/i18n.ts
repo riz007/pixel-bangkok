@@ -77,6 +77,10 @@ const en = {
     ["Esc", "Close"],
   ] as [string, string][],
   aiOnLabel: "Show the plain drawing",
+  aiPartial: (percent: number) =>
+    `AI art covers about ${percent}% of this map so far. The rest stays as the plain drawing.`,
+  aiShowArea: "Show painted area",
+  featuredHide: "Hide the Isometric Cities badge",
   aiOffLabel: "Show AI art",
   trafficOnLabel: "Pause traffic and boats",
   trafficOffLabel: "Play traffic and boats",
@@ -204,6 +208,10 @@ const th: Strings = {
     ["Esc", "ปิด"],
   ],
   aiOnLabel: "ดูภาพวาดต้นฉบับ",
+  aiPartial: (percent: number) =>
+    `ภาพ AI ครอบคลุมราว ${percent}% ของแผนที่นี้ ส่วนที่เหลือยังเป็นภาพวาดต้นฉบับ`,
+  aiShowArea: "ดูบริเวณที่วาดแล้ว",
+  featuredHide: "ซ่อนป้าย Isometric Cities",
   aiOffLabel: "ดูภาพ AI",
   trafficOnLabel: "หยุดรถและเรือ",
   trafficOffLabel: "เล่นรถและเรือ",

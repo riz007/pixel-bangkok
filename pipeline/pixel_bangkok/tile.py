@@ -503,6 +503,10 @@ def run(
             "coverage": summary["coverage"],
             "composed_at": summary["composed_at"],
         }
+        plan_path = build_dir / "ai" / "plan.json"
+        if plan_path.exists():
+            lon, lat = json.loads(plan_path.read_text(encoding="utf-8"))["focus"]
+            manifest["ai"]["focus"] = {"lon": lon, "lat": lat}
     output = build_dir / "manifest.json"
     output.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     tile_count = sum(entry["columns"] * entry["rows"] for entry in levels)
