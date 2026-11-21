@@ -18,6 +18,7 @@ function poi(id: string, rank: number | null): PointOfInterest {
     sourceUrl: null,
     rank,
     thumbnail: null,
+    line: null,
     image: { x: 0, y: 0 },
   };
 }

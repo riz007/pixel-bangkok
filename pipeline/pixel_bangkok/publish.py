@@ -120,6 +120,7 @@ def project_pois(
                 "source_url": poi.source_url,
                 "icon": poi.icon,
                 "rank": poi.rank,
+                **({"line": poi.line} if poi.line else {}),
                 "image": {"x": round(px, 2), "y": round(py, 2)},
             }
         )

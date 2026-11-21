@@ -259,6 +259,11 @@ export function detectLang(languages: readonly string[]): Lang {
   return languages.some((code) => code.toLowerCase().startsWith("th")) ? "th" : "en";
 }
 
+export function lineLabel(line: { en: string; th: string; code: string }, lang: Lang) {
+  const name = lang === "th" ? line.th : line.en;
+  return line.code ? `${name} · ${line.code}` : name;
+}
+
 export function placeName(poi: { nameEn: string; nameTh: string | null }, lang: Lang) {
   const primary = lang === "th" && poi.nameTh ? poi.nameTh : poi.nameEn;
   const secondary = lang === "th" ? poi.nameEn : poi.nameTh;

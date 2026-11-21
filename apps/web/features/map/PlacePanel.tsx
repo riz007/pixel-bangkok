@@ -1,4 +1,4 @@
-import { type Lang, placeName, STRINGS } from "@/lib/i18n";
+import { type Lang, lineLabel, placeName, STRINGS } from "@/lib/i18n";
 import type { PointOfInterest } from "@/lib/manifest";
 
 import { categoryInfo } from "./poiCategories";
@@ -39,6 +39,7 @@ export function PlacePanel({ poi, number, lang, onClose }: PlacePanelProps) {
       <p className="panel__category">
         <span aria-hidden="true">{category.glyph}</span> {category.label}
       </p>
+      {poi.line && <p className="panel__line">{lineLabel(poi.line, lang)}</p>}
       {poi.description && <p className="panel__description">{poi.description}</p>}
       <dl className="panel__meta">
         <dt>{text.coordinates}</dt>

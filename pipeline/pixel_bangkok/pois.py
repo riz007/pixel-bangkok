@@ -41,6 +41,24 @@ MAX_ATTEMPTS = 5
 MIN_POIS = 40
 POIS_PER_KM2 = 1.5
 _QID = re.compile(r"^Q\d+$")
+_STATION_CODE = re.compile(r"^([A-Z]+)\d*$")
+SRT_OPERATOR = "การรถไฟแห่งประเทศไทย"
+# Official station-code prefixes (OSM `ref`) and the lines they belong to.
+LINES = {
+    "CEN": ("BTS Sukhumvit and Silom lines", "รถไฟฟ้าบีทีเอส สายสุขุมวิทและสายสีลม"),
+    "N": ("BTS Sukhumvit Line", "รถไฟฟ้าบีทีเอส สายสุขุมวิท"),
+    "E": ("BTS Sukhumvit Line", "รถไฟฟ้าบีทีเอส สายสุขุมวิท"),
+    "S": ("BTS Silom Line", "รถไฟฟ้าบีทีเอส สายสีลม"),
+    "W": ("BTS Silom Line", "รถไฟฟ้าบีทีเอส สายสีลม"),
+    "G": ("Gold Line", "รถไฟฟ้าสายสีทอง"),
+    "BL": ("MRT Blue Line", "รถไฟฟ้ามหานคร สายสีน้ำเงิน"),
+    "PP": ("MRT Purple Line", "รถไฟฟ้ามหานคร สายสีม่วง"),
+    "YL": ("MRT Yellow Line", "รถไฟฟ้ามหานคร สายสีเหลือง"),
+    "PK": ("MRT Pink Line", "รถไฟฟ้ามหานคร สายสีชมพู"),
+    "A": ("Airport Rail Link", "รถไฟฟ้าแอร์พอร์ต เรล ลิงก์"),
+    "RN": ("SRT Dark Red Line", "รถไฟฟ้าสายสีแดงเข้ม"),
+    "RW": ("SRT Light Red Line", "รถไฟฟ้าสายสีแดงอ่อน"),
+}
 
 
 def build_query(bbox: str) -> str:
@@ -80,6 +98,20 @@ def category(tags: dict[str, str]) -> str:
     if "historic" in tags:
         return "historic"
     return "landmark"
+
+
+def station_line(tags: dict[str, str]) -> dict[str, str] | None:
+    """Line names and station code from the OSM `ref` code, or the SRT operator."""
+    if tags.get("railway") != "station":
+        return None
+    for ref in (tags.get("ref") or "").split(";"):
+        match = _STATION_CODE.match(ref.strip())
+        if match and match.group(1) in LINES:
+            en, th = LINES[match.group(1)]
+            return {"en": en, "th": th, "code": ref.strip()}
+    if SRT_OPERATOR in (tags.get("operator", ""), tags.get("network", "")):
+        return {"en": "State Railway of Thailand", "th": SRT_OPERATOR, "code": ""}
+    return None
 
 
 def anchor_point(element: dict[str, Any]) -> tuple[float, float] | None:
@@ -212,10 +244,22 @@ def build_pois(
             "source_url": _source_url(qid, info.get("enwiki")),
             "_rank": info.get("sitelinks", 0),
         }
+        line = station_line(tags)
+        if line:
+            candidate["line"] = line
+            candidate["aliases"] = sorted(
+                set(candidate["aliases"]) | {line["en"], line["th"]} | ({line["code"]} - {""})
+            )
         existing = by_qid.get(qid)
         if existing is None or (element["type"] != "node" and existing["_rank_type"] == "node"):
             candidate["_rank_type"] = element["type"]
+            if existing and "line" in existing and "line" not in candidate:
+                candidate["line"] = existing["line"]
+                candidate["aliases"] = sorted(set(candidate["aliases"]) | set(existing["aliases"]))
             by_qid[qid] = candidate
+        elif "line" in candidate and "line" not in existing:
+            existing["line"] = candidate["line"]
+            existing["aliases"] = sorted(set(existing["aliases"]) | set(candidate["aliases"]))
     ranked = sorted(by_qid.values(), key=lambda item: (-item["_rank"], item["name_en"]))[:limit]
     seen: set[str] = set()
     pois = []

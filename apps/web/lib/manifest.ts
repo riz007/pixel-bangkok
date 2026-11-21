@@ -81,7 +81,14 @@ export interface PointOfInterest {
   sourceUrl: string | null;
   rank: number | null;
   thumbnail: string | null;
+  line: StationLine | null;
   image: { x: number; y: number };
+}
+
+export interface StationLine {
+  en: string;
+  th: string;
+  code: string;
 }
 
 export interface AreaSummary {
@@ -352,9 +359,16 @@ export function parsePois(input: unknown, manifest: TileManifest): PointOfIntere
       sourceUrl: optionalText(poi, "source_url", context),
       rank: typeof poi.rank === "number" && Number.isFinite(poi.rank) ? poi.rank : null,
       thumbnail: optionalText(poi, "thumbnail", context),
+      line: poi.line == null ? null : stationLine(poi.line, `${context}.line`),
       image: { x, y },
     };
   });
+}
+
+function stationLine(input: unknown, context: string): StationLine {
+  const line = object(input, context);
+  const code = optionalText(line, "code", context) ?? "";
+  return { en: text(line, "en", context), th: text(line, "th", context), code };
 }
 
 export function parseAreaIndex(input: unknown): AreaSummary[] {

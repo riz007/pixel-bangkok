@@ -94,6 +94,7 @@ class PointOfInterest:
     source_url: str | None = None
     icon: str | None = None
     rank: int | None = None
+    line: dict[str, str] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PointOfInterest:
@@ -118,4 +119,16 @@ class PointOfInterest:
             source_url=data.get("source_url"),
             icon=data.get("icon"),
             rank=int(data["rank"]) if data.get("rank") is not None else None,
+            line=_line(data),
         )
+
+
+def _line(data: dict[str, Any]) -> dict[str, str] | None:
+    line = data.get("line")
+    if line is None:
+        return None
+    if not isinstance(line, dict) or not all(
+        isinstance(line.get(k), str) for k in ("en", "th", "code")
+    ):
+        raise SchemaError(f"POI {data['id']} line needs en, th and code strings")
+    return {key: line[key] for key in ("en", "th", "code")}

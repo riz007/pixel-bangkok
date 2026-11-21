@@ -3,7 +3,7 @@
 import { type RefObject, useId, useMemo, useState } from "react";
 
 import { parseLatLon, type Point } from "@/lib/coords";
-import { type Lang, placeName, STRINGS } from "@/lib/i18n";
+import { type Lang, lineLabel, placeName, STRINGS } from "@/lib/i18n";
 import type { PointOfInterest } from "@/lib/manifest";
 import { searchPois } from "@/lib/search";
 
@@ -109,6 +109,7 @@ export function PoiSearch({ pois, lang, inputRef, onSelect, locate, onGoTo }: Po
                       {names.secondary}
                     </span>
                   )}
+                  {poi.line && <span className="search__line">{lineLabel(poi.line, lang)}</span>}
                 </button>
               </li>
             );

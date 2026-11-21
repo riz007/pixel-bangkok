@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { manifestFixture, poisFixture } from "./fixtures.ts";
+import { lineLabel } from "./i18n.ts";
 import { DataError, parseAreaIndex, parseManifest, parsePois } from "./manifest.ts";
 
 test("parses a valid manifest", () => {
@@ -88,6 +89,19 @@ test("parses POIs with independent Thai and English names", () => {
   assert.equal(pois[0]?.nameTh, "พระปรางค์วัดอรุณ");
   assert.deepEqual(pois[0]?.image, { x: 500, y: 150 });
   assert.equal(pois[1]?.sourceUrl, null);
+});
+
+test("parses a station's line and rejects a malformed one", () => {
+  const manifest = parseManifest(manifestFixture());
+  const [first, second] = poisFixture().pois;
+  const line = { en: "BTS Silom Line", th: "รถไฟฟ้าบีทีเอส สายสีลม", code: "S2" };
+  const pois = parsePois({ pois: [{ ...first, line }, second] }, manifest);
+  assert.deepEqual(pois[0]?.line, line);
+  assert.equal(pois[1]?.line, null);
+  assert.equal(lineLabel(line, "en"), "BTS Silom Line · S2");
+  assert.equal(lineLabel({ ...line, code: "" }, "th"), "รถไฟฟ้าบีทีเอส สายสีลม");
+  const broken = { pois: [{ ...first, line: { en: "BTS" } }, second] };
+  assert.throws(() => parsePois(broken, manifest), /line\.th/);
 });
 
 test("rejects POIs outside the image and duplicate ids", () => {

@@ -1,6 +1,6 @@
 from shapely.geometry import Point, Polygon
 
-from pixel_bangkok.pois import anchor_point, build_pois, category
+from pixel_bangkok.pois import anchor_point, build_pois, category, station_line
 from pixel_bangkok.publish import merge_pois
 from pixel_bangkok.schemas import PointOfInterest
 
@@ -111,3 +111,57 @@ def test_curated_pois_win_over_nearby_generated_ones(bounds):
     ]
     merged = merge_pois(curated, generated, bounds)
     assert [poi.id for poi in merged] == ["wat-arun-central-prang", "wat-arun-pier", "elsewhere"]
+
+
+def test_station_line_comes_from_the_official_code():
+    assert station_line({"railway": "station", "ref": "S2"}) == {
+        "en": "BTS Silom Line",
+        "th": "รถไฟฟ้าบีทีเอส สายสีลม",
+        "code": "S2",
+    }
+    assert station_line({"railway": "station", "ref": "ซอ;RW01"})["en"] == "SRT Light Red Line"
+    assert station_line({"railway": "station", "ref": "A6"})["en"] == "Airport Rail Link"
+    srt = station_line({"railway": "station", "ref": "ลู.", "operator": "การรถไฟแห่งประเทศไทย"})
+    assert srt == {"en": "State Railway of Thailand", "th": "การรถไฟแห่งประเทศไทย", "code": ""}
+    assert station_line({"railway": "station", "ref": "X9"}) is None
+    assert station_line({"amenity": "marketplace", "ref": "S2"}) is None
+
+
+def test_interchange_stations_keep_their_lines_and_are_searchable_by_code(bounds):
+    def station(node_id, qid, ref):
+        lon, lat = bounds.world_to_lonlat(100, 100)
+        tags = {
+            "railway": "station",
+            "name": "พญาไท",
+            "name:en": "Phaya Thai",
+            "wikidata": qid,
+            "ref": ref,
+        }
+        return {"type": "node", "id": node_id, "lon": lon, "lat": lat, "tags": tags}
+
+    pois = build_pois(
+        [station(1, "Q1", "N2"), station(2, "Q2", "A8")],
+        {"Q1": {"sitelinks": 5}, "Q2": {"sitelinks": 4}},
+        bounds,
+    )
+    lines = {poi["id"]: poi["line"]["en"] for poi in pois}
+    assert lines == {"phaya-thai": "BTS Sukhumvit Line", "phaya-thai-2": "Airport Rail Link"}
+    assert "N2" in pois[0]["aliases"] and "BTS Sukhumvit Line" in pois[0]["aliases"]
+    assert PointOfInterest.from_dict(pois[0]).line == pois[0]["line"]
+
+
+def test_station_keeps_its_line_when_the_named_building_has_no_code(bounds):
+    lon, lat = bounds.world_to_lonlat(100, 100)
+    node = {
+        "type": "node",
+        "id": 1,
+        "lon": lon,
+        "lat": lat,
+        "tags": {"railway": "station", "name:en": "Siam", "wikidata": "Q1", "ref": "CEN"},
+    }
+    tags = {"railway": "station", "name:en": "Siam", "wikidata": "Q1", "building": "train_station"}
+    way = _way(bounds, 2, [(90, 90), (110, 90), (110, 110), (90, 110), (90, 90)], tags)
+    for order in ([node, way], [way, node]):
+        [poi] = build_pois(order, {"Q1": {"sitelinks": 9}}, bounds)
+        assert poi["source"].startswith("OpenStreetMap way 2")
+        assert poi["line"]["en"] == "BTS Sukhumvit and Silom lines"

@@ -19,6 +19,7 @@ function poi(id: string, x: number, y: number, lat: number, rank: number | null)
     sourceUrl: null,
     rank,
     thumbnail: null,
+    line: null,
     image: { x, y },
   };
 }

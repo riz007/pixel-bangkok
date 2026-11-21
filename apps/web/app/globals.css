@@ -235,6 +235,11 @@ kbd {
   color: var(--paper-dim);
 }
 
+.search__line {
+  font-size: 0.75rem;
+  color: var(--gold);
+}
+
 .search__empty {
   padding: 8px 10px;
   color: var(--paper-dim);
@@ -786,6 +791,12 @@ kbd {
   color: var(--gold);
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.panel__line {
+  margin: 4px 8px 0;
+  color: var(--paper);
+  font-size: 0.82rem;
 }
 
 .panel__description {
