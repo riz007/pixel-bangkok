@@ -1,10 +1,12 @@
-"""Paths for the optional traffic and boat animation layer.
+"""Paths for the optional traffic, boat and pedestrian animation layer.
 
 Input: data/raw/<area>/osm.json (Overpass JSON, WGS84).
 Output: data/processed/<area>/motion.json with paths in world metres (x east,
 y north from the area's south-west corner), clipped to the area. Endpoints
 are shared node indexes so the viewer can route vehicles across junctions.
-The animation is illustrative: vehicle counts and positions are not data.
+The animation is illustrative: vehicle and people counts and positions are not
+data. People walk only on mapped footways, pedestrian streets, paths and steps,
+and on the sidewalks the renderer draws beside roads.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ ROAD_CLASSES = {
 }
 EXCLUDED_SERVICE = {"parking_aisle", "driveway", "drive-through", "emergency_access"}
 WATER_KINDS = {"river": "river", "canal": "canal"}
+FOOT_CLASSES = {"footway", "pedestrian", "path", "steps"}
 NODE_PRECISION = 1
 MIN_LENGTH_M = 5.0
 METRO_KINDS = {"subway", "light_rail", "monorail"}
@@ -54,8 +57,10 @@ def _oneway(tags: dict[str, str]) -> int:
 
 
 def classify(tags: dict[str, str]) -> tuple[str, str] | None:
-    """Return (layer, class) for a way that vehicles or boats can use."""
+    """Return (layer, class) for a way that vehicles, boats or people can use."""
     highway = tags.get("highway", "").removesuffix("_link")
+    if highway in FOOT_CLASSES:
+        return ("footways", highway) if _walkable(tags) else None
     if highway in ROAD_CLASSES and tags.get("service") not in EXCLUDED_SERVICE:
         if tags.get("access") in {"no", "private"} or tags.get("area") == "yes":
             return None
@@ -70,6 +75,18 @@ def classify(tags: dict[str, str]) -> tuple[str, str] | None:
     return None
 
 
+def _walkable(tags: dict[str, str]) -> bool:
+    """Outdoor, at-grade-or-above, public ways only: no tunnels, indoor ways or plazas."""
+    if tags.get("access") in {"no", "private"} or tags.get("area") == "yes":
+        return False
+    if tags.get("tunnel") not in (None, "no") or tags.get("indoor") not in (None, "no"):
+        return False
+    try:
+        return int(tags.get("layer", "0")) >= 0
+    except ValueError:
+        return True
+
+
 def _parts(geometry: BaseGeometry) -> list[LineString]:
     if isinstance(geometry, LineString):
         return [geometry]
@@ -81,7 +98,7 @@ def build_paths(
 ) -> dict[str, Any]:
     clip = box(0, 0, bounds.width_m, bounds.height_m)
     nodes: dict[tuple[float, float], int] = {}
-    layers: dict[str, list[dict[str, Any]]] = {"roads": [], "waterways": []}
+    layers: dict[str, list[dict[str, Any]]] = {"roads": [], "waterways": [], "footways": []}
 
     def node(point: tuple[float, float]) -> int:
         key = (round(point[0], NODE_PRECISION), round(point[1], NODE_PRECISION))
@@ -107,6 +124,11 @@ def build_paths(
                 "end": node(coords[-1]),
                 "points": coords,
             }
+            if layer == "footways":
+                path["oneway"] = 0
+                path["width_m"] = float(
+                    render.road_widths_m.get(kind, render.road_widths_m["default"])
+                )
             if layer == "roads":
                 highway = tags["highway"].removesuffix("_link")
                 path["oneway"] = _oneway(tags)
@@ -119,6 +141,7 @@ def build_paths(
         "crs": bounds.crs,
         "units": "metres east/north of the area's south-west corner",
         "drive_side": "left",
+        "sidewalk_m": render.sidewalk_m,
         "node_count": len(nodes),
         **layers,
     }
@@ -186,8 +209,9 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(paths, separators=(",", ":")), encoding="utf-8")
     log.info(
-        "motion paths: %d roads, %d rail, %d waterways -> %s",
+        "motion paths: %d roads, %d footways, %d rail, %d waterways -> %s",
         len(paths["roads"]),
+        len(paths["footways"]),
         len(paths.get("rail", [])),
         len(paths["waterways"]),
         output,

@@ -69,27 +69,21 @@ def load_pois(
 
 
 def write_thumbnails(pois: list[dict[str, Any]], build_dir: Path, output_dir: Path) -> int:
-    """Crop each landmark from the map (AI layer where composed) for the places rail."""
-    from .blocks import blocks_of, read_info, read_region
+    """Crop each landmark from the plain drawing for the places rail."""
+    from .blocks import read_info, read_region
 
     blocks_dir = build_dir / "blocks"
     try:
-        info = read_info(blocks_dir)
+        read_info(blocks_dir)
     except FileNotFoundError:
         return 0
-    blocks = blocks_of(info)
-    prefix = (
-        "ai_master"
-        if all((blocks_dir / f"ai_master_{block.name}.png").exists() for block in blocks)
-        else "master"
-    )
     output_dir.mkdir(parents=True, exist_ok=True)
     half_w, half_h = THUMBNAIL_SIZE[0] // 2, THUMBNAIL_SIZE[1] // 2
     for poi in pois:
         x, y = round(poi["image"]["x"]), round(poi["image"]["y"])
         top = y - int(half_h * 1.4)
         crop = read_region(
-            blocks_dir, prefix, (x - half_w, top, x + half_w, top + THUMBNAIL_SIZE[1]), "RGB"
+            blocks_dir, "master", (x - half_w, top, x + half_w, top + THUMBNAIL_SIZE[1]), "RGB"
         )
         crop.save(output_dir / f"{poi['id']}.webp", quality=82, method=6)
         poi["thumbnail"] = f"places/{poi['id']}.webp"

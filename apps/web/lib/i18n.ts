@@ -19,7 +19,6 @@ const en = {
   resultsCount: (n: number) =>
     n === 1 ? "1 place found" : `${n} places found`,
   places: "Places",
-  aiArt: "AI art",
   labels: "Labels",
   traffic: "Traffic",
   share: "Share",
@@ -60,8 +59,6 @@ const en = {
   howMadeTitle: "How it was made",
   howMade:
     "Every building, road, canal and tree comes from OpenStreetMap, with heights from Google Open Buildings and trees from a canopy map. A program draws them as an isometric map, so every place is where it really is.",
-  aiNote: (model: string, coverage: number) =>
-    `Where the map looks hand-painted, it was redrawn by ${model}, an AI image model, over ${coverage}% of the area. It can invent small details such as rooftop clutter, people and cars, so every AI tile is checked against the plain drawing and discarded if anything moved. Switch off AI art to see the plain drawing.`,
   shortcutsTitle: "Keyboard shortcuts",
   dataTitle: "Data and credits",
   madeBy: (name: string) => `Made by ${name}`,
@@ -69,19 +66,13 @@ const en = {
   shortcuts: [
     ["/", "Search places or lat, long"],
     ["P", "Show or hide places"],
-    ["A", "AI art on or off"],
     ["L", "Labels on or off"],
     ["T", "Traffic and boats on or off"],
     ["F", "Full screen"],
     ["+ / −", "Zoom"],
     ["Esc", "Close"],
   ] as [string, string][],
-  aiOnLabel: "Show the plain drawing",
-  aiPartial: (percent: number) =>
-    `AI art covers about ${percent}% of this map so far. The rest stays as the plain drawing.`,
-  aiShowArea: "Show painted area",
   featuredHide: "Hide the Isometric Cities badge",
-  aiOffLabel: "Show AI art",
   trafficOnLabel: "Pause traffic and boats",
   trafficOffLabel: "Play traffic and boats",
   filterLabel: "Show places by type",
@@ -123,7 +114,7 @@ const en = {
     ],
     [
       "Is AI used?",
-      "Optionally. Parts of the map can be shown repainted by an open image model for a hand-drawn look; every AI tile is checked against the plain drawing and discarded if anything moved. The plain drawing is always one click away.",
+      "No. Every building, road, canal and tree is drawn by a program from open map data, so nothing on the map is invented by an image model.",
     ],
     [
       "Is it free to use?",
@@ -150,7 +141,6 @@ const th: Strings = {
   searchNoResults: "ไม่พบสถานที่ ลองพิมพ์ชื่อภาษาไทยหรืออังกฤษ",
   resultsCount: (n: number) => `พบ ${n} แห่ง`,
   places: "สถานที่",
-  aiArt: "ภาพ AI",
   labels: "ป้ายชื่อ",
   traffic: "การจราจร",
   share: "แชร์",
@@ -191,8 +181,6 @@ const th: Strings = {
   howMadeTitle: "แผนที่นี้ทำอย่างไร",
   howMade:
     "อาคาร ถนน คลอง และต้นไม้ทุกแห่งมาจาก OpenStreetMap ความสูงอาคารจาก Google Open Buildings และต้นไม้จากแผนที่ความสูงเรือนยอด โปรแกรมวาดทั้งหมดเป็นแผนที่ไอโซเมตริก ทุกสถานที่จึงอยู่ตรงตำแหน่งจริง",
-  aiNote: (model: string, coverage: number) =>
-    `ส่วนที่ดูเหมือนภาพวาดมือ วาดใหม่ด้วย ${model} ซึ่งเป็นโมเดลสร้างภาพด้วย AI ครอบคลุม ${coverage}% ของพื้นที่ AI อาจเติมรายละเอียดเล็ก ๆ เช่น ของบนดาดฟ้า ผู้คน และรถ ทุกภาพจึงถูกตรวจเทียบกับภาพวาดต้นฉบับ และตัดทิ้งหากตำแหน่งเคลื่อน ปิดภาพ AI เพื่อดูภาพวาดต้นฉบับได้`,
   shortcutsTitle: "ปุ่มลัด",
   dataTitle: "ข้อมูลและเครดิต",
   madeBy: (name: string) => `สร้างโดย ${name}`,
@@ -200,19 +188,13 @@ const th: Strings = {
   shortcuts: [
     ["/", "ค้นหาสถานที่หรือพิกัด"],
     ["P", "แสดงหรือซ่อนสถานที่"],
-    ["A", "เปิดหรือปิดภาพ AI"],
     ["L", "เปิดหรือปิดป้ายชื่อ"],
     ["T", "เปิดหรือปิดรถและเรือ"],
     ["F", "เต็มจอ"],
     ["+ / −", "ซูม"],
     ["Esc", "ปิด"],
   ],
-  aiOnLabel: "ดูภาพวาดต้นฉบับ",
-  aiPartial: (percent: number) =>
-    `ภาพ AI ครอบคลุมราว ${percent}% ของแผนที่นี้ ส่วนที่เหลือยังเป็นภาพวาดต้นฉบับ`,
-  aiShowArea: "ดูบริเวณที่วาดแล้ว",
   featuredHide: "ซ่อนป้าย Isometric Cities",
-  aiOffLabel: "ดูภาพ AI",
   trafficOnLabel: "หยุดรถและเรือ",
   trafficOffLabel: "เล่นรถและเรือ",
   filterLabel: "แสดงสถานที่ตามประเภท",
@@ -254,7 +236,7 @@ const th: Strings = {
     ],
     [
       "ใช้ AI หรือเปล่า",
-      "ใช้เป็นตัวเลือก บางส่วนของแผนที่แสดงภาพที่วาดใหม่ด้วยโมเดลสร้างภาพแบบเปิด ทุกภาพถูกตรวจเทียบกับภาพวาดต้นฉบับและตัดทิ้งหากตำแหน่งเคลื่อน กดปิดภาพ AI ได้ทุกเมื่อ",
+      "ไม่ใช้ อาคาร ถนน คลอง และต้นไม้ทุกจุดวาดด้วยโปรแกรมจากข้อมูลแผนที่แบบเปิด จึงไม่มีสิ่งใดบนแผนที่ที่ถูกสร้างขึ้นโดยโมเดลสร้างภาพ",
     ],
     [
       "ใช้ฟรีไหม",

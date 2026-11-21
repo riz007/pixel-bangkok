@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from . import drift
 from .blocks import blocks_of, read_info, read_region
@@ -44,20 +44,20 @@ STRIDE_PX = 768
 FEATHER_PX = WINDOW_PX - STRIDE_PX
 PRESERVE_WEIGHT = 0.5
 MAX_BACKGROUND_FRACTION = 0.6
-PALETTE_COLOURS = 64
-STRENGTH = 0.85
-RETRY_STRENGTH = 0.7
+STRENGTH = 0.6
+RETRY_STRENGTH = 0.45
 MAX_ATTEMPTS = 2
-STEPS = 8
+OUTLINE_RGB = (0x2A, 0x24, 0x30)
+STEPS = 12
 QUANTIZE = 4
 SEED = 20261118
 MODEL = "Qwen-Image 2.1 Turbo (mflux, 4-bit, small text encoder)"
 LICENCE = "Qwen Research License: non-commercial research and evaluation only"
 PROMPT = (
-    "Redraw this aerial view as detailed isometric pixel art of a dense Bangkok city: crisp "
-    "pixel edges, limited palette, small windows, rooftop clutter, trees, cars and boats. "
-    "Keep every building, road, river and tree exactly where it is with the same shapes. "
-    "No text."
+    "Restyle this isometric city drawing as clean isometric pixel art. Keep every building, "
+    "roof, road, river, tree and open space exactly as drawn, with the same shapes and colours. "
+    "Only refine edges, shading and texture. Do not add any objects: no cars, people, rooftop "
+    "equipment, boats or extra trees. No text."
 )
 WORKER = Path(__file__).resolve().parents[1] / "experiments" / "mflux_worker.py"
 DEFAULT_MFLUX_PYTHON = Path.home() / ".local/share/uv/tools/mflux/bin/python"
@@ -120,15 +120,6 @@ def plan(
     return output
 
 
-def snap_palette(image: Image.Image, colours: int = PALETTE_COLOURS) -> Image.Image:
-    """Limit a model output to a small palette with no dithering, for a pixel-art finish."""
-    return (
-        image.convert("RGB")
-        .quantize(colors=colours, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-        .convert("RGB")
-    )
-
-
 def _load_state(ai_dir: Path) -> dict[str, Any]:
     path = ai_dir / "state.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"windows": {}}
@@ -141,10 +132,22 @@ def _save_state(ai_dir: Path, state: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def finish(reference: Image.Image, painted: Image.Image) -> Image.Image:
+    """Sharpen the paint lightly, then restore the drawing's exact outline pixels on top."""
+    sharp = painted.convert("RGB").filter(
+        ImageFilter.UnsharpMask(radius=1.2, percent=90, threshold=2)
+    )
+    out = np.asarray(sharp).copy()
+    ref = np.asarray(reference.convert("RGB"))
+    outline = np.all(ref == OUTLINE_RGB, axis=-1)
+    out[outline] = ref[outline]
+    return Image.fromarray(out)
+
+
 def judge(reference: Image.Image, raw: Image.Image) -> tuple[Image.Image, dict[str, Any]]:
-    """Snap to a palette, undo a small uniform offset, then measure drift against the input."""
-    snapped = snap_palette(raw.convert("RGB").resize(reference.size, Image.Resampling.LANCZOS))
-    aligned, dx, dy = drift.register(reference, snapped)
+    """Undo a small uniform offset, then measure drift against the input."""
+    resized = raw.convert("RGB").resize(reference.size, Image.Resampling.LANCZOS)
+    aligned, dx, dy = drift.register(reference, resized)
     metrics = drift.drift(reference, aligned)
     metrics["registered_px"] = [dx, dy]
     return aligned, metrics
@@ -281,10 +284,11 @@ def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
                 Image.open(windows_dir / f"{window['id']}.in.png") as reference,
                 Image.open(windows_dir / f"{window['id']}.raw.png") as raw,
             ):
-                snapped, metrics = judge(reference.convert("RGB"), raw)
+                drawing = reference.convert("RGB")
+                snapped, metrics = judge(drawing, raw)
             accepted = bool(metrics["passes"])
             if accepted:
-                snapped.save(windows_dir / f"{window['id']}.png")
+                finish(drawing, snapped).save(windows_dir / f"{window['id']}.png")
             state["windows"][window["id"]] = {
                 "left": window["left"],
                 "top": window["top"],

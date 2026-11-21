@@ -56,15 +56,6 @@ def run_ai_stage(stage: str, area_id: str, limit: int, focus: str | None) -> Non
     elif stage == "ai-cycle":
         ai_repaint.run(paths.build_dir, limit)
         ai_repaint.compose(config, paths.build_dir, area)
-        tile.run(area, config, paths.raw_dir, paths.processed_dir, paths.build_dir, ai_only=True)
-        publish.run(
-            area,
-            config,
-            paths.build_dir,
-            paths.curated_dir,
-            paths.publish_dir,
-            paths.processed_dir,
-        )
 
 
 def run_stage(stage: str, area_id: str, force: bool) -> None:

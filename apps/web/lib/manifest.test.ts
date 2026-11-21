@@ -3,7 +3,12 @@ import { test } from "node:test";
 
 import { manifestFixture, poisFixture } from "./fixtures.ts";
 import { lineLabel } from "./i18n.ts";
-import { DataError, parseAreaIndex, parseManifest, parsePois } from "./manifest.ts";
+import {
+  DataError,
+  parseAreaIndex,
+  parseManifest,
+  parsePois,
+} from "./manifest.ts";
 
 test("parses a valid manifest", () => {
   const manifest = parseManifest(manifestFixture());
@@ -22,19 +27,6 @@ test("parses a valid manifest", () => {
   const withoutAnimation: Record<string, unknown> = { ...manifestFixture() };
   delete withoutAnimation.animation;
   assert.equal(parseManifest(withoutAnimation).animation, null);
-  assert.equal(manifest.ai, null);
-  const withAi = parseManifest({
-    ...manifestFixture(),
-    ai: {
-      url_template: "ai/{level}/{column}_{row}.{format}",
-      overlay_url_template: null,
-      model: "Test model",
-      licence: "research only",
-      coverage: 0.25,
-    },
-  });
-  assert.equal(withAi.ai?.coverage, 0.25);
-  assert.throws(() => parseManifest({ ...manifestFixture(), ai: { model: "x" } }), /manifest\.ai\.url_template/);
   assert.equal(manifest.source.retrievedAt, "2026-01-01T00:00:00+00:00");
 });
 
@@ -42,8 +34,16 @@ test("rejects malformed manifests with a descriptive error", () => {
   const base = manifestFixture();
   const cases: [string, unknown, RegExp][] = [
     ["not an object", [], /must be an object/],
-    ["unsupported version", { ...base, version: 4 }, /unsupported manifest version/],
-    ["missing image", { ...base, image: undefined }, /manifest\.image must be an object/],
+    [
+      "unsupported version",
+      { ...base, version: 4 },
+      /unsupported manifest version/,
+    ],
+    [
+      "missing image",
+      { ...base, image: undefined },
+      /manifest\.image must be an object/,
+    ],
     [
       "zero tile size",
       { ...base, tiles: { ...base.tiles, tile_size: 0 } },
@@ -59,17 +59,35 @@ test("rejects malformed manifests with a descriptive error", () => {
       { ...base, image: { ...base.image, width: 999 } },
       /top level does not match/,
     ],
-    ["missing attributions", { ...base, attributions: undefined }, /attributions must be an array/],
-    ["empty attributions", { ...base, attributions: [] }, /attributions must not be empty/],
+    [
+      "missing attributions",
+      { ...base, attributions: undefined },
+      /attributions must be an array/,
+    ],
+    [
+      "empty attributions",
+      { ...base, attributions: [] },
+      /attributions must not be empty/,
+    ],
     [
       "attribution without url",
       { ...base, attributions: [{ text: "x", licence: "y", provider: "z" }] },
       /attributions\[0\]\.url must be a non-empty string/,
     ],
-    ["version 2 manifest", { ...base, version: 2 }, /unsupported manifest version 2/],
+    [
+      "version 2 manifest",
+      { ...base, version: 2 },
+      /unsupported manifest version 2/,
+    ],
     [
       "short matrix",
-      { ...base, projection: { ...base.projection, world_to_image: { px: [1, 2], py: [1, 2, 3, 4] } } },
+      {
+        ...base,
+        projection: {
+          ...base.projection,
+          world_to_image: { px: [1, 2], py: [1, 2, 3, 4] },
+        },
+      },
       /world_to_image\.px must be four numbers/,
     ],
   ];
@@ -94,12 +112,19 @@ test("parses POIs with independent Thai and English names", () => {
 test("parses a station's line and rejects a malformed one", () => {
   const manifest = parseManifest(manifestFixture());
   const [first, second] = poisFixture().pois;
-  const line = { en: "BTS Silom Line", th: "รถไฟฟ้าบีทีเอส สายสีลม", code: "S2" };
+  const line = {
+    en: "BTS Silom Line",
+    th: "รถไฟฟ้าบีทีเอส สายสีลม",
+    code: "S2",
+  };
   const pois = parsePois({ pois: [{ ...first, line }, second] }, manifest);
   assert.deepEqual(pois[0]?.line, line);
   assert.equal(pois[1]?.line, null);
   assert.equal(lineLabel(line, "en"), "BTS Silom Line · S2");
-  assert.equal(lineLabel({ ...line, code: "" }, "th"), "รถไฟฟ้าบีทีเอส สายสีลม");
+  assert.equal(
+    lineLabel({ ...line, code: "" }, "th"),
+    "รถไฟฟ้าบีทีเอส สายสีลม",
+  );
   const broken = { pois: [{ ...first, line: { en: "BTS" } }, second] };
   assert.throws(() => parsePois(broken, manifest), /line\.th/);
 });
@@ -114,7 +139,11 @@ test("rejects POIs outside the image and duplicate ids", () => {
 });
 
 test("parses the area index", () => {
-  const areas = parseAreaIndex({ areas: [{ id: "wat-arun", name: { en: "Wat Arun", th: null } }] });
-  assert.deepEqual(areas, [{ id: "wat-arun", name: { en: "Wat Arun", th: null } }]);
+  const areas = parseAreaIndex({
+    areas: [{ id: "wat-arun", name: { en: "Wat Arun", th: null } }],
+  });
+  assert.deepEqual(areas, [
+    { id: "wat-arun", name: { en: "Wat Arun", th: null } },
+  ]);
   assert.throws(() => parseAreaIndex({ areas: [{ id: "" }] }), DataError);
 });

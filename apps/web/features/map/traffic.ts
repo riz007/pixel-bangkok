@@ -19,6 +19,9 @@ const MIN_IMAGE_ZOOM = 0.3;
 const PIXEL_ART_ZOOM = 1;
 const MAX_STEP_SECONDS = 0.1;
 const MAX_VEHICLES = 15000;
+const MAX_PEOPLE = 8000;
+/** People are about 2 px wide at 1:1, so they are drawn only from this zoom in. */
+const PEOPLE_MIN_ZOOM = 0.75;
 const SEED = 20261117;
 const WAKE_COLOUR = "rgba(196, 222, 210, 0.75)";
 const GLASS = "#33434f";
@@ -139,6 +142,35 @@ const MAINLINE: VehicleType = {
   laneFraction: 0.5,
   cars: 6,
 };
+const PERSON: VehicleType = {
+  name: "person",
+  layer: "footways",
+  lengthM: 0.36,
+  widthM: 0.5,
+  heightM: 0.85,
+  speedMps: 1.3,
+  body: ["#f4f1ea", "#9ec3e6", "#f2c94c", "#c0392b", "#2c3e66", "#e58fb0", "#3e8e5e", "#8a8f96"],
+  roof: "#2a2224",
+  laneFraction: 0.8,
+  walker: true,
+};
+const SIDEWALK_PERSON: VehicleType = { ...PERSON, layer: "roads" };
+const PERSON_LEGS = ["#2c3140", "#1e1f24", "#4a5f86", "#8b7a5c", "#3b3b3f"];
+const PERSON_SKIN = ["#c98d62", "#a86f4a", "#e0ac82", "#8c5a3a"];
+const PERSON_HAIR = "#241c1e";
+const TORSO_M = 0.6;
+const HEAD_M = 0.27;
+const FOOT_RULES: SpawnRule[] = [
+  { type: PERSON, kinds: ["pedestrian"], metresPerVehicle: 5 },
+  { type: PERSON, kinds: ["footway"], metresPerVehicle: 12 },
+  { type: PERSON, kinds: ["steps"], metresPerVehicle: 15 },
+  { type: PERSON, kinds: ["path"], metresPerVehicle: 30 },
+];
+const SIDEWALK_RULES: SpawnRule[] = [
+  { type: SIDEWALK_PERSON, kinds: ["major"], metresPerVehicle: 40 },
+  { type: SIDEWALK_PERSON, kinds: ["minor"], metresPerVehicle: 70 },
+];
+
 const RAIL_RULES: SpawnRule[] = [
   { type: METRO, kinds: ["metro"], metresPerVehicle: 1200 },
   { type: MAINLINE, kinds: ["rail"], metresPerVehicle: 3000 },
@@ -192,7 +224,10 @@ export class TrafficLayer {
   private readonly roads: Network;
   private readonly water: Network;
   private readonly rail: Network;
+  private readonly foot: Network;
   private readonly vehicles: Vehicle[];
+  private readonly people: number;
+  private showPeople = false;
   private readonly random = seededRandom(SEED + 1);
   private readonly matrix: Matrix;
   private readonly towardCamera: { x: number; y: number };
@@ -213,10 +248,19 @@ export class TrafficLayer {
     this.roads = new Network(motion.roads);
     this.water = new Network(motion.waterways);
     this.rail = new Network(motion.rail);
+    this.foot = new Network(motion.footways);
+    const walkers = [
+      ...spawn(this.foot, FOOT_RULES, SEED + 4, MAX_PEOPLE),
+      ...(motion.sidewalkM > 0
+        ? spawn(this.roads, SIDEWALK_RULES, SEED + 5, MAX_PEOPLE / 2, motion.sidewalkM)
+        : []),
+    ];
+    this.people = walkers.length;
     this.vehicles = [
       ...spawn(this.roads, ROAD_RULES, SEED, MAX_VEHICLES),
       ...spawn(this.water, WATER_RULES, SEED + 2, MAX_VEHICLES),
       ...spawn(this.rail, RAIL_RULES, SEED + 3, MAX_VEHICLES),
+      ...walkers,
     ];
     this.matrix = manifest.projection.worldToImage;
     const azimuth = (manifest.projection.cameraAzimuthDeg * Math.PI) / 180;
@@ -226,7 +270,11 @@ export class TrafficLayer {
   }
 
   get vehicleCount(): number {
-    return this.vehicles.length;
+    return this.vehicles.length - this.people;
+  }
+
+  get peopleCount(): number {
+    return this.people;
   }
 
   setPlaying(playing: boolean) {
@@ -254,6 +302,7 @@ export class TrafficLayer {
 
   private network(vehicle: Vehicle): Network {
     const layer = vehicle.type.layer;
+    if (layer === "footways") return this.foot;
     return layer === "roads" ? this.roads : layer === "rail" ? this.rail : this.water;
   }
 
@@ -278,6 +327,7 @@ export class TrafficLayer {
     if (!item || !this.viewer.isOpen()) return;
     const imageZoom = item.viewportToImageZoom(this.viewer.viewport.getZoom(true));
     if (imageZoom < MIN_IMAGE_ZOOM) return;
+    this.showPeople = imageZoom >= PEOPLE_MIN_ZOOM;
     const visible = item.viewportToImageRectangle(this.viewer.viewport.getBounds(true));
     const left = Math.floor(visible.x) - 8;
     const top = Math.floor(visible.y) - 8;
@@ -316,8 +366,10 @@ export class TrafficLayer {
     elevated: boolean | null,
   ) {
     const margin = 60;
-    const ordered: { depth: number; box: Box; vehicle: Vehicle }[] = [];
-    for (const vehicle of this.vehicles) {
+    const ordered: { depth: number; box: Box; vehicle: Vehicle; index: number }[] = [];
+    for (let index = 0; index < this.vehicles.length; index += 1) {
+      const vehicle = this.vehicles[index]!;
+      if (vehicle.type.walker && (!this.showPeople || elevated === true)) continue;
       const network = this.network(vehicle);
       const cars = vehicle.type.cars ?? 1;
       for (let car = 0; car < cars; car += 1) {
@@ -334,6 +386,7 @@ export class TrafficLayer {
         ordered.push({
           depth: worldToImage(this.matrix, cx, cy, 0)[1],
           vehicle,
+          index,
           box: {
             cx,
             cy,
@@ -348,8 +401,12 @@ export class TrafficLayer {
       }
     }
     ordered.sort((a, b) => a.depth - b.depth);
-    for (const { vehicle, box } of ordered) {
+    for (const { vehicle, box, index } of ordered) {
       const type = vehicle.type;
+      if (type.walker) {
+        this.drawPerson(context, box, vehicle.colour, index);
+        continue;
+      }
       if (type.wake) this.drawWake(context, box);
       this.drawBox(context, box, vehicle.colour, type.cabin ? vehicle.colour : type.roof);
       if (type.cabin) {
@@ -365,6 +422,23 @@ export class TrafficLayer {
         this.drawBox(context, cabin, type.cabin.colour, type.roof);
       }
     }
+  }
+
+  /** Legs, shirt and head as three stacked boxes: about 2 x 5 px at 1:1. */
+  private drawPerson(context: CanvasRenderingContext2D, box: Box, shirt: string, index: number) {
+    const legs = PERSON_LEGS[index % PERSON_LEGS.length]!;
+    const skin = PERSON_SKIN[Math.floor(index / PERSON_LEGS.length) % PERSON_SKIN.length]!;
+    this.drawBox(context, box, legs, legs);
+    const torso: Box = { ...box, z0: box.z1, z1: box.z1 + TORSO_M };
+    this.drawBox(context, torso, shirt, shirt);
+    const head: Box = {
+      ...box,
+      halfLength: box.halfLength * 0.75,
+      halfWidth: box.halfWidth * 0.55,
+      z0: torso.z1,
+      z1: torso.z1 + HEAD_M,
+    };
+    this.drawBox(context, head, skin, PERSON_HAIR);
   }
 
   private corners(box: Box): [number, number][] {

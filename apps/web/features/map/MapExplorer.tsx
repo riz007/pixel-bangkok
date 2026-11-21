@@ -63,8 +63,6 @@ export function MapExplorer({
   );
   const [railOpen, setRailOpen] = useState(true);
   const [creditsOpen, setCreditsOpen] = useState(false);
-  const [aiOn, setAiOn] = useState(true);
-  const [aiHint, setAiHint] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [animationAvailable, setAnimationAvailable] = useState(false);
   const reducedMotion = useSyncExternalStore(
@@ -101,7 +99,6 @@ export function MapExplorer({
   );
   const selectedPoi =
     data?.pois.find((poi) => poi.id === selectedPoiId) ?? null;
-  const hasAi = Boolean(data?.manifest.ai);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -130,29 +127,10 @@ export function MapExplorer({
   };
 
   const changeArea = (id: string) => {
-    setAiHint(false);
     setSelectedPoiId(null);
     setPin(null);
     setAreaId(id);
     updateUrl({ area: id, place: null });
-  };
-
-  const aiPartial = (data?.manifest.ai?.coverage ?? 1) < 0.5;
-  const aiFocus = data?.manifest.ai?.focus ?? null;
-
-  const toggleAi = useCallback(() => {
-    setAiOn((on) => !on);
-    if (aiPartial) setAiHint(true);
-  }, [aiPartial]);
-
-  const showAiArea = () => {
-    const point =
-      data && aiFocus
-        ? lonLatToImage(data.manifest, aiFocus.lon, aiFocus.lat)
-        : null;
-    setAiOn(true);
-    setAiHint(false);
-    if (point) commandsRef.current?.goTo(point);
   };
 
   const goTo = (point: Point) => {
@@ -217,7 +195,6 @@ export function MapExplorer({
         event.preventDefault();
         searchRef.current?.focus();
       } else if (key === "p") setRailOpen((open) => !open);
-      else if (key === "a" && hasAi) toggleAi();
       else if (key === "l") setShowLabels((on) => !on);
       else if (key === "t" && animationAvailable) setPlayChoice(!playing);
       else if (key === "f") toggleFullscreen();
@@ -228,7 +205,7 @@ export function MapExplorer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasAi, animationAvailable, playing, select, toggleAi]);
+  }, [animationAvailable, playing, select]);
 
   return (
     <div
@@ -290,18 +267,6 @@ export function MapExplorer({
             <PixelIcon name="places" />
             <span>{text.places}</span>
           </button>
-          {hasAi && (
-            <button
-              type="button"
-              className="tool"
-              aria-pressed={aiOn}
-              aria-label={aiOn ? text.aiOnLabel : text.aiOffLabel}
-              onClick={toggleAi}
-            >
-              <PixelIcon name="ai" />
-              <span aria-hidden="true">{text.aiArt}</span>
-            </button>
-          )}
           <button
             type="button"
             className="tool"
@@ -381,7 +346,6 @@ export function MapExplorer({
               visibleIds={filter ? shownIds : null}
               selectedPoiId={selectedPoiId}
               onSelectPoi={select}
-              aiOn={aiOn}
               playing={playing}
               showLabels={showLabels}
               lang={lang}
@@ -410,11 +374,7 @@ export function MapExplorer({
               <PlacesRail
                 places={tour}
                 baseUrl={data.baseUrl}
-                version={
-                  data.manifest.ai
-                    ? `${data.manifest.contentVersion}-${data.manifest.ai.version}`
-                    : data.manifest.contentVersion
-                }
+                version={`${data.manifest.contentVersion}-plain`}
                 lang={lang}
                 selectedId={selectedPoiId}
                 onSelect={select}
@@ -453,32 +413,6 @@ export function MapExplorer({
         )}
         {data && !selectedPoi && <FeaturedBadge lang={lang} />}
         <ConsentBanner lang={lang} onPrivacy={openPrivacy} />
-        {aiHint && data?.manifest.ai && (
-          <div className="ai-hint" role="status">
-            <p>
-              {text.aiPartial(
-                Math.max(1, Math.round(data.manifest.ai.coverage * 100)),
-              )}
-            </p>
-            {aiFocus && (
-              <button
-                type="button"
-                className="ai-hint__show"
-                onClick={showAiArea}
-              >
-                {text.aiShowArea}
-              </button>
-            )}
-            <button
-              type="button"
-              className="ai-hint__close"
-              aria-label={text.dismiss}
-              onClick={() => setAiHint(false)}
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-          </div>
-        )}
         <p className="toast" role="status" aria-live="polite">
           {toast}
         </p>

@@ -1,6 +1,12 @@
 import { FULL_NAME_ROMAN, FULL_NAME_TH, STRINGS } from "@/lib/i18n";
 import { areas, places } from "@/lib/server-data";
-import { absolute, DESCRIPTION, REPO_URL, SITE_NAME, SITE_NAME_TH } from "@/lib/site";
+import {
+  absolute,
+  DESCRIPTION,
+  REPO_URL,
+  SITE_NAME,
+  SITE_NAME_TH,
+} from "@/lib/site";
 
 export const revalidate = 3600;
 
@@ -12,7 +18,7 @@ export async function GET(): Promise<Response> {
     "",
     `> ${DESCRIPTION}`,
     "",
-    "Pixel Bangkok is a free, interactive isometric pixel-art map of Bangkok (Krung Thep Maha Nakhon, Thailand) in Thai and English. Every building, road, canal, railway and tree is placed from OpenStreetMap with one fixed isometric projection, so positions and distances are real. Building heights come from Google Open Buildings 2.5D Temporal or OpenStreetMap; tree symbols follow the Meta and WRI canopy height map; landmark descriptions come from Wikidata. Optional AI-repainted tiles (Qwen-Image, non-commercial research licence) are checked against the plain drawing and discarded if anything moved.",
+    "Pixel Bangkok is a free, interactive isometric pixel-art map of Bangkok (Krung Thep Maha Nakhon, Thailand) in Thai and English. Every building, road, canal, railway and tree is placed from OpenStreetMap with one fixed isometric projection, so positions and distances are real. Building heights come from Google Open Buildings 2.5D Temporal or OpenStreetMap; tree symbols follow the Meta and WRI canopy height map; landmark descriptions come from Wikidata. No AI image model is used: nothing on the map is invented.",
     "",
     `Bangkok's ceremonial name: ${FULL_NAME_TH} (${FULL_NAME_ROMAN}).`,
     "",
@@ -20,7 +26,9 @@ export async function GET(): Promise<Response> {
     "",
   ];
   for (const area of await areas()) {
-    const name = area.name.th ? `${area.name.en} (${area.name.th})` : area.name.en;
+    const name = area.name.th
+      ? `${area.name.en} (${area.name.th})`
+      : area.name.en;
     lines.push(`- [${name}](${absolute(`/?area=${area.id}`)})`);
   }
   const [main] = await areas();
@@ -32,8 +40,12 @@ export async function GET(): Promise<Response> {
     if (featured.length > 0) {
       lines.push("", "## Places", "");
       for (const place of featured) {
-        const name = place.name_th ? `${place.name_en} (${place.name_th})` : place.name_en;
-        const url = absolute(`/?area=${main.id}&place=${encodeURIComponent(place.id)}`);
+        const name = place.name_th
+          ? `${place.name_en} (${place.name_th})`
+          : place.name_en;
+        const url = absolute(
+          `/?area=${main.id}&place=${encodeURIComponent(place.id)}`,
+        );
         lines.push(`- [${name}](${url}): ${place.description}`);
       }
     }
@@ -48,7 +60,12 @@ export async function GET(): Promise<Response> {
     "",
     "## Questions",
     "",
-    ...STRINGS.en.faq.flatMap(([question, answer]) => [`### ${question}`, "", answer, ""]),
+    ...STRINGS.en.faq.flatMap(([question, answer]) => [
+      `### ${question}`,
+      "",
+      answer,
+      "",
+    ]),
     "## Data and licences",
     "",
     "- Map data © OpenStreetMap contributors, ODbL: https://www.openstreetmap.org/copyright",

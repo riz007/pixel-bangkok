@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 
 from pixel_bangkok import ai_repaint
-from pixel_bangkok.ai_repaint import compose, feather, snap_palette, window_positions
+from pixel_bangkok.ai_repaint import OUTLINE_RGB, compose, feather, finish, window_positions
 from pixel_bangkok.blocks import block_grid
 
 
@@ -25,12 +25,6 @@ def test_feather_ramps_only_where_neighbours_exist():
     assert edge[0] == 1 and edge[-1] < 0.01
     overlap = inner[768:1024] + inner[:256]
     assert np.allclose(overlap, 1.0, atol=0.01)
-
-
-def test_snap_palette_limits_colours():
-    rng = np.random.default_rng(1)
-    image = Image.fromarray(rng.integers(0, 256, (64, 64, 3), dtype=np.uint8), "RGB")
-    assert len(set(snap_palette(image, 16).get_flattened_data())) <= 16
 
 
 def test_compose_blends_accepted_windows_and_keeps_procedural_elsewhere(tmp_path, render_config):
@@ -161,3 +155,14 @@ def test_windows_whose_render_changed_are_queued_again(tmp_path):
     assert (windows / "stale" / "1024_0.png").exists()
     assert not (windows / "1024_0.png").exists()
     assert ai_repaint.invalidate(tmp_path) == []
+
+
+def test_finish_restores_the_drawings_outlines_exactly():
+    drawing = Image.new("RGB", (16, 16), (200, 190, 170))
+    for x in range(16):
+        drawing.putpixel((x, 8), OUTLINE_RGB)
+    painted = Image.new("RGB", (16, 16), (120, 160, 90))
+    painted.putpixel((3, 8), (90, 90, 90))
+    result = finish(drawing, painted)
+    assert all(result.getpixel((x, 8)) == OUTLINE_RGB for x in range(16))
+    assert result.getpixel((3, 3)) == (120, 160, 90)

@@ -23,7 +23,13 @@ def test_classification():
     assert classify({"highway": "residential"}) == ("roads", "minor")
     assert classify({"highway": "service"}) == ("roads", "service")
     assert classify({"highway": "service", "service": "parking_aisle"}) is None
-    assert classify({"highway": "footway"}) is None
+    assert classify({"highway": "footway"}) == ("footways", "footway")
+    assert classify({"highway": "pedestrian"}) == ("footways", "pedestrian")
+    assert classify({"highway": "steps"}) == ("footways", "steps")
+    assert classify({"highway": "pedestrian", "area": "yes"}) is None
+    assert classify({"highway": "footway", "tunnel": "yes"}) is None
+    assert classify({"highway": "footway", "indoor": "yes"}) is None
+    assert classify({"highway": "corridor"}) is None
     assert classify({"highway": "residential", "access": "private"}) is None
     assert classify({"waterway": "river"}) == ("waterways", "river")
     assert classify({"waterway": "canal"}) == ("waterways", "canal")
@@ -42,6 +48,11 @@ def test_paths_are_clipped_connected_and_keep_direction(bounds, render_config):
     paths = build_paths(elements, bounds, render_config)
     roads = {path["id"]: path for path in paths["roads"]}
     assert set(roads) == {"way/1", "way/2", "way/3"}
+    footways = paths["footways"]
+    assert [path["id"] for path in footways] == ["way/6"]
+    assert footways[0]["oneway"] == 0
+    assert footways[0]["width_m"] == render_config.road_widths_m["footway"]
+    assert paths["sidewalk_m"] == render_config.sidewalk_m
     assert roads["way/1"]["points"][0][0] == 0.0
     assert roads["way/1"]["end"] == roads["way/2"]["start"]
     assert roads["way/2"]["oneway"] == 1 and roads["way/3"]["oneway"] == -1

@@ -17,14 +17,26 @@ import { parseManifest } from "./manifest.ts";
 const manifest = parseManifest(manifestFixture());
 
 test("image corners map to the viewport rectangle of a non-square image", () => {
-  assert.deepEqual(imageToViewport({ x: 0, y: 0 }, manifest.image), { x: 0, y: 0 });
-  assert.deepEqual(imageToViewport({ x: 1000, y: 300 }, manifest.image), { x: 1, y: 0.3 });
-  assert.deepEqual(imageToViewport({ x: 500, y: 150 }, manifest.image), { x: 0.5, y: 0.15 });
+  assert.deepEqual(imageToViewport({ x: 0, y: 0 }, manifest.image), {
+    x: 0,
+    y: 0,
+  });
+  assert.deepEqual(imageToViewport({ x: 1000, y: 300 }, manifest.image), {
+    x: 1,
+    y: 0.3,
+  });
+  assert.deepEqual(imageToViewport({ x: 500, y: 150 }, manifest.image), {
+    x: 0.5,
+    y: 0.15,
+  });
 });
 
 test("viewport conversion round-trips", () => {
   const point = { x: 123.5, y: 287.25 };
-  const back = viewportToImage(imageToViewport(point, manifest.image), manifest.image);
+  const back = viewportToImage(
+    imageToViewport(point, manifest.image),
+    manifest.image,
+  );
   assert.ok(Math.abs(back.x - point.x) < 1e-9);
   assert.ok(Math.abs(back.y - point.y) < 1e-9);
 });
@@ -35,8 +47,16 @@ test("tile URLs follow the manifest template", () => {
     "/maps/test-area/tiles/10/3_1.webp?v=0",
   );
   assert.equal(
-    tileUrl(manifest, "/maps", 1, 0, 0, "ai/{level}/{column}_{row}.{format}", "abc"),
-    "/maps/ai/1/0_0.webp?v=abc",
+    tileUrl(
+      manifest,
+      "/maps",
+      1,
+      0,
+      0,
+      "overlay/{level}/{column}_{row}.{format}",
+      "abc",
+    ),
+    "/maps/overlay/1/0_0.webp?v=abc",
   );
 });
 
@@ -47,7 +67,10 @@ test("tile source options come from the manifest", () => {
   assert.equal(options.tileSize, 256);
   assert.equal(options.tileOverlap, 1);
   assert.equal(options.maxLevel, 10);
-  assert.equal(options.getTileUrl(9, 1, 0), "/maps/test-area/tiles/9/1_0.webp?v=0");
+  assert.equal(
+    options.getTileUrl(9, 1, 0),
+    "/maps/test-area/tiles/9/1_0.webp?v=0",
+  );
 });
 
 test("lon/lat lands on the image pixel the pipeline projects it to", () => {
@@ -67,24 +90,38 @@ test("coordinates outside the area are rejected", () => {
 });
 
 test("latitude, longitude text is parsed in map-app order", () => {
-  assert.deepEqual(parseLatLon("13.7437, 100.4897"), { lat: 13.7437, lon: 100.4897 });
-  assert.deepEqual(parseLatLon(" 13.7437 100.4897 "), { lat: 13.7437, lon: 100.4897 });
+  assert.deepEqual(parseLatLon("13.7437, 100.4897"), {
+    lat: 13.7437,
+    lon: 100.4897,
+  });
+  assert.deepEqual(parseLatLon(" 13.7437 100.4897 "), {
+    lat: 13.7437,
+    lon: 100.4897,
+  });
   assert.equal(parseLatLon("Wat Arun"), null);
   assert.equal(parseLatLon("95, 100"), null);
 });
 
 test("tiles missing from the presence bitmap are never requested", () => {
-  const level = manifest.tiles.levels.find((entry) => entry.columns * entry.rows >= 2)!;
+  const level = manifest.tiles.levels.find(
+    (entry) => entry.columns * entry.rows >= 2,
+  )!;
   const bits = new Uint8Array(Math.ceil((level.columns * level.rows) / 8));
   bits[0] = 0b01;
   const encoded = btoa(String.fromCharCode(...bits));
   const withGaps = {
     ...manifest,
-    tiles: { ...manifest.tiles, present: { tiles: { [level.level]: encoded } } },
+    tiles: {
+      ...manifest.tiles,
+      present: { tiles: { [level.level]: encoded } },
+    },
   };
   const exists = tilePresence(withGaps, manifest.tiles.urlTemplate);
   assert.equal(exists(level.level, 0, 0), true);
-  assert.equal(exists(level.level, 1, 0) || level.columns === 1, level.columns === 1);
+  assert.equal(
+    exists(level.level, 1, 0) || level.columns === 1,
+    level.columns === 1,
+  );
   assert.equal(exists(level.level, level.columns, 0), false);
   assert.equal(tilePresence(manifest, "overlay/x")(level.level, 0, 0), true);
 });

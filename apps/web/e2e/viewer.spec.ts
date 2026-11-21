@@ -1,7 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const TILE_URL =
-  /\/maps\/wat-arun\/(tiles|ai)\/\d+\/\d+_\d+\.webp(\?v=[\w-]+)?$/;
+const TILE_URL = /\/maps\/wat-arun\/tiles\/\d+\/\d+_\d+\.webp(\?v=[\w-]+)?$/;
 const PRANG = '[data-poi-id="wat-arun-central-prang"]';
 const TEMPLE_COLOURS = [
   "243,234,214",
@@ -16,15 +15,6 @@ const TEMPLE_COLOURS = [
 async function openMap(page: Page) {
   await page.goto("/?area=wat-arun");
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
-}
-
-async function showPlainDrawing(page: Page) {
-  const plain = page.getByRole("button", { name: "Show the plain drawing" });
-  if (!(await plain.count())) return;
-  await plain.click();
-  const hint = page.locator(".ai-hint");
-  if (await hint.count())
-    await hint.getByRole("button", { name: "Dismiss" }).click();
 }
 
 async function markerAnchor(page: Page, selector: string) {
@@ -70,7 +60,7 @@ test("loads tiles for the visible area only, never the master image", async ({
     0,
   );
   const mapRequests = requests.filter((path) =>
-    /^\/maps\/wat-arun\/(tiles|ai)\//.test(path),
+    path.startsWith("/maps/wat-arun/tiles/"),
   );
   expect(mapRequests.length).toBeGreaterThan(0);
   expect(mapRequests.length).toBeLessThan(totalTiles / 2);
@@ -104,7 +94,6 @@ test("POI marker stays on its landmark while zooming and panning", async ({
 }) => {
   const onTemple = new RegExp(`^(${TEMPLE_COLOURS.join("|")})$`);
   await openMap(page);
-  await showPlainDrawing(page);
   await page.locator(PRANG).click();
   for (let step = 0; step < 6; step += 1) {
     await page.getByRole("button", { name: "Zoom in" }).click();
@@ -493,32 +482,18 @@ test("About shows the Isometric Cities badge", async ({ page }) => {
   await expect(badge).toHaveAttribute("href", "https://isometriccities.com/");
 });
 
-test("AI toggle explains partial coverage and can fly to the painted area", async ({
+test("the Isometric Cities badge shows on the map and stays hidden once dismissed", async ({
   page,
 }) => {
   await openMap(page);
-  const manifest = await (
-    await page.request.get("/maps/wat-arun/manifest.json")
-  ).json();
-  test.skip(
-    !manifest.ai || manifest.ai.coverage >= 0.5,
-    "AI layer absent or mostly complete",
-  );
-  await page.getByRole("button", { name: "Show the plain drawing" }).click();
-  const hint = page.locator(".ai-hint");
-  await expect(hint).toContainText("AI art covers about");
-  await hint.getByRole("button", { name: "Show painted area" }).click();
-  await expect(hint).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Show the plain drawing" }),
-  ).toHaveAttribute("aria-pressed", "true");
-});
-
-test("the Isometric Cities badge shows on the map and stays hidden once dismissed", async ({ page }) => {
-  await openMap(page);
   const badge = page.locator(".featured");
-  await expect(badge.getByRole("link")).toHaveAttribute("href", "https://isometriccities.com/cities/bangkok/");
-  await badge.getByRole("button", { name: "Hide the Isometric Cities badge" }).click();
+  await expect(badge.getByRole("link")).toHaveAttribute(
+    "href",
+    "https://isometriccities.com/cities/bangkok/",
+  );
+  await badge
+    .getByRole("button", { name: "Hide the Isometric Cities badge" })
+    .click();
   await expect(badge).toHaveCount(0);
   await page.reload();
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");

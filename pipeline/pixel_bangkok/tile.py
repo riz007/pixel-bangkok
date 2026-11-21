@@ -337,21 +337,10 @@ def build_manifest(
     }
 
 
-def _existing_levels(width: int, height: int, tile_size: int) -> list[dict[str, int]]:
-    levels = level_dimensions(width, height)
-    for entry in levels:
-        entry["columns"] = math.ceil(entry["width"] / tile_size)
-        entry["rows"] = math.ceil(entry["height"] / tile_size)
-    return levels
-
-
 PYRAMID_DIRS = {
     "tiles": "tiles",
     "overlay": "overlay",
     "front_overlay": "front",
-    "ai_tiles": "ai",
-    "ai_overlay_tiles": "ai_overlay",
-    "ai_front_overlay_tiles": "ai_front",
 }
 """Build directory name -> published directory name for every tile pyramid."""
 
@@ -362,9 +351,8 @@ def run(
     raw_dir: Path,
     processed_dir: Path,
     build_dir: Path,
-    ai_only: bool = False,
 ) -> Path:
-    """Write tile pyramids and the manifest; `ai_only` reuses existing base and overlay tiles."""
+    """Write tile pyramids and the manifest."""
     from .blocks import blocks_of, read_info
 
     blocks_dir = build_dir / "blocks"
@@ -391,23 +379,17 @@ def run(
     red, green, blue, _ = parse_color(render.palette["background"])
     background = red | (green << 8) | (blue << 16) | (255 << 24)
     has_overlay = all((blocks_dir / f"overlay_{block.name}.png").exists() for block in blocks)
-    reuse = ai_only and (build_dir / "tiles").exists()
-    if reuse:
-        levels = _existing_levels(width, height, render.tiles.tile_size)
-    else:
-        levels = write_pyramid_blocks(
-            loaders("master", "RGB"),
-            width,
-            height,
-            "RGB",
-            build_dir / "tiles",
-            render.tiles,
-            build_dir / ".tiles-work",
-            blank=background,
-        )
-    if has_overlay and reuse:
-        has_overlay = (build_dir / "overlay").exists()
-    elif has_overlay:
+    levels = write_pyramid_blocks(
+        loaders("master", "RGB"),
+        width,
+        height,
+        "RGB",
+        build_dir / "tiles",
+        render.tiles,
+        build_dir / ".tiles-work",
+        blank=background,
+    )
+    if has_overlay:
         write_pyramid_blocks(
             loaders("overlay", "RGBA"),
             width,
@@ -420,9 +402,7 @@ def run(
     elif (build_dir / "overlay").exists():
         shutil.rmtree(build_dir / "overlay")
     has_front = all((blocks_dir / f"front_overlay_{block.name}.png").exists() for block in blocks)
-    if has_front and reuse:
-        has_front = (build_dir / "front_overlay").exists()
-    elif has_front:
+    if has_front:
         write_pyramid_blocks(
             loaders("front_overlay", "RGBA"),
             width,
@@ -434,28 +414,9 @@ def run(
         )
     elif (build_dir / "front_overlay").exists():
         shutil.rmtree(build_dir / "front_overlay")
-    has_ai = all((blocks_dir / f"ai_master_{block.name}.png").exists() for block in blocks)
-    has_ai_front = has_ai and all(
-        (blocks_dir / f"ai_front_overlay_{block.name}.png").exists() for block in blocks
-    )
-    for prefix, mode, directory, wanted in (
-        ("ai_master", "RGB", "ai_tiles", has_ai),
-        ("ai_overlay", "RGBA", "ai_overlay_tiles", has_ai),
-        ("ai_front_overlay", "RGBA", "ai_front_overlay_tiles", has_ai_front),
-    ):
-        if wanted:
-            write_pyramid_blocks(
-                loaders(prefix, mode),
-                width,
-                height,
-                mode,
-                build_dir / directory,
-                render.tiles,
-                build_dir / f".{directory}-work",
-                blank=background if mode == "RGB" else None,
-            )
-        elif (build_dir / directory).exists():
-            shutil.rmtree(build_dir / directory)
+    for stale in ("ai_tiles", "ai_overlay_tiles", "ai_front_overlay_tiles"):
+        if (build_dir / stale).exists():
+            shutil.rmtree(build_dir / stale)
     digest = hashlib.sha256()
     for block in blocks:
         digest.update((blocks_dir / f"master_{block.name}.png").read_bytes())
@@ -485,28 +446,6 @@ def run(
         animation["motion_url"] = "motion.json"
     if animation:
         manifest["animation"] = animation
-    summary_path = build_dir / "ai" / "summary.json"
-    summary = (
-        json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else None
-    )
-    if has_ai and summary and summary["coverage"] > 0:
-        manifest["ai"] = {
-            "url_template": "ai/{level}/{column}_{row}.{format}",
-            "overlay_url_template": "ai_overlay/{level}/{column}_{row}.{format}"
-            if has_overlay
-            else None,
-            "front_overlay_url_template": "ai_front/{level}/{column}_{row}.{format}"
-            if has_ai_front
-            else None,
-            "model": summary["model"],
-            "licence": summary["licence"],
-            "coverage": summary["coverage"],
-            "composed_at": summary["composed_at"],
-        }
-        plan_path = build_dir / "ai" / "plan.json"
-        if plan_path.exists():
-            lon, lat = json.loads(plan_path.read_text(encoding="utf-8"))["focus"]
-            manifest["ai"]["focus"] = {"lon": lon, "lat": lat}
     output = build_dir / "manifest.json"
     output.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     tile_count = sum(entry["columns"] * entry["rows"] for entry in levels)

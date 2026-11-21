@@ -152,3 +152,42 @@ test("rail paths carry deck heights and line colours to trains", () => {
   assert.equal(vehicle?.colour, "#65B724");
   assert.deepEqual(parseMotion({ node_count: 0, roads: [], waterways: [] }).rail, []);
 });
+
+test("people walk on footways and on the sidewalk beside roads", () => {
+  const road = (oneway: number) => ({
+    id: "way/1",
+    kind: "major",
+    start: 0,
+    end: 1,
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+    oneway,
+    width_m: 10,
+  });
+  const motion = parseMotion({
+    node_count: 2,
+    roads: [road(1)],
+    waterways: [],
+    footways: [{ ...road(0), id: "way/2", kind: "footway", width_m: 2 }],
+    sidewalk_m: 1.8,
+  });
+  assert.equal(motion.footways.length, 1);
+  assert.equal(motion.sidewalkM, 1.8);
+  const person = { ...car, layer: "footways" as const, walker: true, laneFraction: 0.8 };
+  const onFoot = spawn(new Network(motion.footways), [{ type: person, kinds: ["footway"], metresPerVehicle: 2 }], 5, 50);
+  assert.ok(onFoot.every((walker) => Math.abs(walker.lateralM) <= 0.8));
+  const onSidewalk = spawn(
+    new Network(motion.roads),
+    [{ type: { ...person, layer: "roads" as const }, kinds: ["major"], metresPerVehicle: 2 }],
+    5,
+    50,
+    motion.sidewalkM,
+  );
+  assert.ok(onSidewalk.every((walker) => Math.abs(walker.lateralM) >= 5.5 && Math.abs(walker.lateralM) <= 6.3));
+  assert.ok(onSidewalk.some((walker) => !walker.forward), "people walk both ways on one-way roads");
+  const old = parseMotion({ node_count: 0, roads: [], waterways: [] });
+  assert.deepEqual(old.footways, []);
+  assert.equal(old.sidewalkM, 0);
+});

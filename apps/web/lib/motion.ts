@@ -17,11 +17,14 @@ export interface MotionData {
   roads: MotionPath[];
   waterways: MotionPath[];
   rail: MotionPath[];
+  footways: MotionPath[];
+  /** Width of the sidewalk the renderer draws beside each road, in metres. */
+  sidewalkM: number;
 }
 
 export interface VehicleType {
   name: string;
-  layer: "roads" | "waterways" | "rail";
+  layer: "roads" | "waterways" | "rail" | "footways";
   lengthM: number;
   widthM: number;
   heightM: number;
@@ -32,6 +35,8 @@ export interface VehicleType {
   laneFraction: number;
   wake?: boolean;
   cars?: number;
+  /** A person: spread across footways, or on the sidewalk beside a road. */
+  walker?: boolean;
 }
 
 export interface Vehicle {
@@ -102,9 +107,9 @@ export function parseMotion(input: unknown): MotionData {
   if (typeof nodeCount !== "number" || !Number.isInteger(nodeCount) || nodeCount < 0) {
     throw new DataError("motion.node_count must be a non-negative integer");
   }
-  const list = (key: "roads" | "waterways" | "rail") => {
+  const list = (key: "roads" | "waterways" | "rail" | "footways") => {
     const value = input[key];
-    if (key === "rail" && value === undefined) return [];
+    if ((key === "rail" || key === "footways") && value === undefined) return [];
     if (!Array.isArray(value)) throw new DataError(`motion.${key} must be an array`);
     return value.map((path, index) => parsePath(path, `motion.${key}[${index}]`, nodeCount));
   };
@@ -113,6 +118,9 @@ export function parseMotion(input: unknown): MotionData {
     roads: list("roads"),
     waterways: list("waterways"),
     rail: list("rail"),
+    footways: list("footways"),
+    sidewalkM:
+      typeof input.sidewalk_m === "number" && input.sidewalk_m >= 0 ? input.sidewalk_m : 0,
   };
 }
 
@@ -224,6 +232,7 @@ export function spawn(
   rules: SpawnRule[],
   seed: number,
   limit: number,
+  sidewalkM = 0,
 ): Vehicle[] {
   const random = seededRandom(seed);
   const vehicles: Vehicle[] = [];
@@ -241,11 +250,16 @@ export function spawn(
       let count = Math.floor(expected) + (random() < expected % 1 ? 1 : 0);
       while (count > 0 && vehicles.length < limit) {
         count -= 1;
-        const forward = path.oneway === 1 ? true : path.oneway === -1 ? false : random() < 0.5;
+        const walker = rule.type.walker === true;
+        const forward =
+          walker || path.oneway === 0 ? random() < 0.5 : path.oneway === 1;
         const twoWay = path.oneway === 0;
         const halfWidth = path.widthM / 2;
-        const lateralM =
-          rule.type.layer !== "waterways"
+        const lateralM = walker
+          ? rule.type.layer === "roads"
+            ? (random() < 0.5 ? -1 : 1) * (halfWidth + sidewalkM * (0.3 + random() * 0.4))
+            : (random() - 0.5) * 2 * halfWidth * rule.type.laneFraction
+          : rule.type.layer !== "waterways"
             ? twoWay
               ? halfWidth * rule.type.laneFraction
               : (random() - 0.5) * halfWidth * 0.6

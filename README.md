@@ -18,7 +18,6 @@ Temples, canals, markets, the Chao Phraya, the BTS and MRT, in Thai and English.
 - Search in Thai or English, by station code (`E4`, `BL28`) or by `lat, long`. Stations show their
   line, so the BTS and Airport Rail Link stops at Phaya Thai are easy to tell apart.
 - Watch cars, tuk-tuks, boats and trains on the elevated BTS and MRT lines move through the city.
-- Switch between the plain drawing and an optional hand-painted (AI) look where it exists.
 - Share a link to any place, for example `/?area=bangkok&place=wat-arun`.
 
 ## How it is made
@@ -33,9 +32,7 @@ canal and tree is where it really is:
 - **Wikidata** for place names and descriptions
 
 A Python pipeline turns this data into one large isometric image and cuts it into map tiles, and a
-Next.js site shows them. The AI look is painted locally, a small square at a time, and checked against
-the plain drawing; any square where something moved is thrown away. It covers parts of the inner
-city so far and grows with each run.
+Next.js site shows them. No AI image model is involved, so nothing on the map is invented.
 
 ## Run it locally
 
@@ -75,9 +72,6 @@ credits on every map:
 - Building heights: Google Open Buildings 2.5D Temporal, CC BY 4.0
 - Tree canopy: Meta and World Resources Institute, CC BY 4.0
 - Descriptions and some tower heights: Wikidata, CC0
-
-The optional AI layer uses Qwen-Image under the Qwen Research License, which allows
-non-commercial use only.
 
 Spot a mistake on the map? Use **Report** in the toolbar to fix it on OpenStreetMap; the fix
 shows up the next time the map is built.
