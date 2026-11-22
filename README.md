@@ -34,11 +34,11 @@ canal and tree is where it really is:
 A Python pipeline turns this data into one large isometric image and cuts it into map tiles, and a
 Next.js site shows them. That drawing is the default view, and no AI image model is involved in it.
 
-Some maps also offer **AI art (beta)**, off by default. It repaints ordinary streets, buildings and
-trees with [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) and the
+Some maps also offer **AI art (beta)**, off by default. It repaints the map, temples and palaces
+included, with [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) and the
 [Isometric Mumbai](https://huggingface.co/Flash1405/isometric-mumbai) style (both Apache 2.0).
-Temples, palaces, mosques, monuments and military land are never repainted, and every painted square
-is checked against the drawing and dropped if anything moved.
+It can lose fine details such as gilded finials, so the plain drawing stays the reference, and every
+painted square is checked against the drawing and dropped if anything moved.
 
 ## Run it locally
 

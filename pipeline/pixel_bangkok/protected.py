@@ -48,7 +48,7 @@ MARGIN_M = 4.0
 POI_SNAP_M = 15.0
 """A protected POI protects the drawn buildings within this distance of its point. A bare circle
 would paste a patch of plain drawing into the AI art without protecting anything drawn."""
-FEATHER_PX = 6
+FEATHER_PX = 3
 
 Shape = tuple[Polygon, float]
 

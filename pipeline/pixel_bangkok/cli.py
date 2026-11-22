@@ -50,6 +50,7 @@ def run_ai_stage(
     limit: int,
     focus: str | None,
     engine: str = ai_repaint.DEFAULT_ENGINE,
+    protect: bool = False,
 ) -> None:
     area = load_area_config(area_id)
     config = load_render_config()
@@ -60,6 +61,8 @@ def run_ai_stage(
 
     def protected_shapes() -> list[protected.Shape]:
         nonlocal shapes
+        if not protect:
+            return []
         if shapes is None:
             shapes = protected.for_area(bounds, paths.processed_dir, paths.curated_dir)
         return shapes
@@ -67,7 +70,8 @@ def run_ai_stage(
     background = np.array(parse_color(config.palette["background"])[:3], dtype=np.uint8)
 
     def ignore(box: tuple[int, int, int, int]) -> np.ndarray:
-        """Protected places and the blank area past the map's edge are never shown from AI."""
+        """Protected places (with --protect) and the blank area past the map's edge are never
+        shown from AI, so they are not judged."""
         projection = IsoProjection.create(bounds, config)
         keep = protected.rasterize(protected_shapes(), projection, box) > 0.5
         drawing = np.asarray(read_region(paths.build_dir / "blocks", "master", box, "RGB"))
@@ -156,12 +160,17 @@ def main(argv: list[str] | None = None) -> int:
         default=ai_repaint.DEFAULT_ENGINE,
         help="ai-run/ai-cycle: AI paint engine",
     )
+    parser.add_argument(
+        "--protect",
+        action="store_true",
+        help="AI stages: keep temples, palaces, mosques and monuments as drawn (see protected.py)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     stages = STAGES if args.stage == "all" else (args.stage,)
     try:
         if args.stage in AI_STAGES:
-            run_ai_stage(args.stage, args.area, args.limit, args.focus, args.engine)
+            run_ai_stage(args.stage, args.area, args.limit, args.focus, args.engine, args.protect)
             return 0
         for stage in stages:
             run_stage(stage, args.area, args.force)
