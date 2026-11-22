@@ -31,7 +31,7 @@ from .heights import parse_height_m
 
 log = logging.getLogger(__name__)
 
-LAYERS = ("buildings", "roads", "rail", "water", "green", "ground", "trees")
+LAYERS = ("buildings", "building_parts", "roads", "rail", "water", "green", "ground", "trees")
 RAIL_KINDS = {"rail", "light_rail", "subway", "monorail", "narrow_gauge", "tram"}
 METRO_KINDS = {"light_rail", "subway", "monorail"}
 TRANSIT_ROUTES = {"train", "subway", "light_rail", "monorail", "tram"}
@@ -254,6 +254,26 @@ def transit_routes(elements: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
     return lines
 
 
+def building_part(tags: dict[str, str]) -> dict[str, Any] | None:
+    """A building:part's sourced vertical extent; None values mean it is not in the data.
+
+    The renderer only draws a building from its parts when every part has both values, so
+    nothing is guessed. Returns None for `building:part=no`.
+    """
+    if tags.get("building:part") == "no":
+        return None
+    height = parse_height_m(tags.get("height"))
+    if "min_height" in tags:
+        min_height = parse_height_m(tags["min_height"])
+    elif tags.get("building:min_level", "0") not in {"0", ""}:
+        min_height = None
+    else:
+        min_height = 0.0
+    if height is not None and (height <= 0 or (min_height is not None and min_height >= height)):
+        height = None
+    return {"category": tags["building:part"], "height_m": height, "min_height_m": min_height}
+
+
 def classify(element: dict[str, Any], render: RenderConfig) -> tuple[str, bool, dict] | None:
     """Return (layer, is_area, extra properties) or None when the element is not rendered."""
     tags = element.get("tags", {})
@@ -355,9 +375,15 @@ def normalise(
         stats["input_elements"] += 1
         tags = element.get("tags", {})
         if "building:part" in tags and "building" not in tags:
-            stats["skipped_building_parts"] += 1
-            continue
-        classified = classify(element, render)
+            part = building_part(tags)
+            if part is None:
+                stats["skipped_building_parts"] += 1
+                continue
+            if part["height_m"] is None or part["min_height_m"] is None:
+                stats["building_parts_without_height"] += 1
+            classified: tuple[str, bool, dict] | None = ("building_parts", True, part)
+        else:
+            classified = classify(element, render)
         if classified is None:
             stats["skipped_unclassified"] += 1
             continue
@@ -485,7 +511,8 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
             "invalid geometries repaired with shapely.make_valid",
             "clipped to the area rectangle",
             "exact duplicate geometries removed per layer",
-            "building:part elements skipped",
+            "building:part elements kept with their sourced height and min_height (None when "
+            "missing); the renderer draws a building from its parts only when all are known",
             "reprojected to WGS84 for storage",
         ],
     }

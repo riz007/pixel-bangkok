@@ -230,6 +230,12 @@
       "wall_light": "#a7adb1",
       "wall_dark": "#80868a",
       "roof": "#9aa0a4"
+    },
+    "monument": {
+      "wall_light": "#ece6d6",
+      "wall_dark": "#bdb5a1",
+      "roof": "#ddd6c4",
+      "roof_edge": "#c8c0ac"
     }
   },
   "material_groups": {

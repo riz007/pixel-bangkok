@@ -709,6 +709,11 @@ class SceneRenderer:
         tone = "light" if lit > WALL_LIGHT_THRESHOLD else "dark"
         return f"{skin}_wall_{tone}"
 
+    def _skin(self, polygon: Polygon, properties: dict, traditional: bool) -> str:
+        if properties.get("facade") == "plain":
+            return "monument"
+        return "temple" if traditional else self.material(polygon, properties)
+
     def material(self, polygon: Polygon, properties: dict) -> str:
         """Deterministic stylised material for a non-temple building (not a source fact)."""
         groups = self.config.material_groups
@@ -782,16 +787,24 @@ class SceneRenderer:
             storey += 1
         return primitives
 
-    def _walls(self, polygon: Polygon, wall_height: float, skin: str) -> list[Primitive]:
+    def _walls(
+        self, polygon: Polygon, wall_height: float, skin: str, base: float = 0.0
+    ) -> list[Primitive]:
         project = self.projection.world_to_native
         primitives = []
         for a, b in self._edges(polygon):
             if not self._faces_camera(a, b):
                 continue
-            quad = (project(*a), project(*b), project(*b, wall_height), project(*a, wall_height))
+            quad = (
+                project(*a, base),
+                project(*b, base),
+                project(*b, wall_height),
+                project(*a, wall_height),
+            )
             fill = self._wall_color(a, b, skin)
             primitives.append(Primitive("polygon", fill, f"shade:{fill}", points=quad))
-            primitives.extend(self._windows(a, b, wall_height, skin))
+            if base == 0 and skin != "monument":
+                primitives.extend(self._windows(a, b, wall_height, skin))
         return primitives
 
     def _roof_outline(self, polygon: Polygon, height: float) -> list[Primitive]:
@@ -801,9 +814,9 @@ class SceneRenderer:
         ]
 
     def prism(
-        self, polygon: Polygon, height: float, skin: str, source_id: str = ""
+        self, polygon: Polygon, height: float, skin: str, source_id: str = "", base: float = 0.0
     ) -> list[Primitive]:
-        primitives = self._walls(polygon, height, skin)
+        primitives = self._walls(polygon, height, skin, base)
         if skin == "temple":
             primitives.append(Primitive("area", "temple_roof", geometry=polygon, z=height))
             return primitives + self._roof_outline(polygon, height)
@@ -813,7 +826,7 @@ class SceneRenderer:
             primitives.append(Primitive("area", f"{skin}_roof", geometry=inner, z=height))
             if self.config.materials.get(skin, {}).get("roof_texture") == "metal":
                 primitives += self._corrugation(polygon, inner, height, f"shade:{skin}_roof")
-            else:
+            elif skin != "monument":
                 primitives += self._rooftop_items(inner, height, source_id)
         return primitives + self._roof_outline(polygon, height)
 
@@ -1086,7 +1099,7 @@ class SceneRenderer:
         traditional = properties["is_temple"] or (
             not self.precincts.is_empty and self.precincts.contains(polygon.representative_point())
         )
-        skin = "temple" if traditional else self.material(polygon, properties)
+        skin = self._skin(polygon, properties, traditional)
         shape = properties.get("roof_shape")
         if traditional and shape == "flat":
             shape = "gabled"
@@ -1101,6 +1114,44 @@ class SceneRenderer:
             if primitives is not None:
                 return primitives
         return self.prism(polygon, height, skin, properties["source_id"])
+
+    def building_parts(
+        self, geometry: BaseGeometry, parts: list[tuple[Polygon, dict]], properties: dict
+    ) -> list[Primitive]:
+        """A building drawn from its OSM building:part pieces, each from min_height to height.
+
+        Lower pieces first; at the same level a piece that encloses others (a plinth) before
+        them; the rest back to front.
+        """
+        outline = max(_polygons(geometry), key=lambda polygon: polygon.area)
+        traditional = properties["is_temple"] or (
+            not self.precincts.is_empty and self.precincts.contains(outline.representative_point())
+        )
+        skin = self._skin(outline, properties, traditional)
+
+        def encloses(piece: Polygon) -> bool:
+            grown = piece.buffer(0.05)
+            return any(other is not piece and grown.contains(other) for other, _ in parts)
+
+        ordered = sorted(
+            parts,
+            key=lambda part: (
+                part[1]["min_height_m"],
+                0 if encloses(part[0]) else 1,
+                -self.projection.depth(part[0].centroid.x, part[0].centroid.y),
+            ),
+        )
+        primitives: list[Primitive] = []
+        for piece, part in ordered:
+            for polygon in _polygons(piece):
+                primitives += self.prism(
+                    orient(polygon),
+                    part["height_m"],
+                    skin,
+                    part["source_id"],
+                    base=part["min_height_m"],
+                )
+        return primitives
 
     def tree(self, point: Point, properties: dict) -> list[Primitive]:
         ppm = self.config.pixels_per_metre
@@ -1159,8 +1210,13 @@ class SceneRenderer:
         buildings: list[tuple[BaseGeometry, dict]],
         trees: list[tuple[BaseGeometry, dict]],
         decks: list[Deck] = (),  # type: ignore[assignment]
+        parts: dict[str, list[tuple[Polygon, dict]]] | None = None,
     ) -> tuple[Image.Image, Image.Image, Image.Image]:
-        """Buildings, vegetation and `front`: what stands in front of an elevated deck."""
+        """Buildings, vegetation and `front`: what stands in front of an elevated deck.
+
+        `parts`: building:part pieces by building source_id (see `parts_by_building`).
+        """
+        parts = parts or {}
         building_layer, vegetation_layer, front = self._blank(), self._blank(), self._blank()
         matrix = self.projection.screen_ground_matrix()
         lift_per_metre = self.cos_elevation * self.config.pixels_per_metre
@@ -1169,6 +1225,13 @@ class SceneRenderer:
         keys: list[str] = []
         raised: list[float] = []
         for geometry, properties in buildings:
+            pieces = parts.get(properties["source_id"])
+            if pieces:
+                items.append(("parts", (geometry, pieces), properties))
+                footprints.append(affine_transform(geometry, matrix))
+                keys.append(properties["source_id"])
+                raised.append(max(part["height_m"] for _, part in pieces) * lift_per_metre)
+                continue
             for index, polygon in enumerate(_polygons(geometry)):
                 polygon = orient(polygon)
                 items.append(("building", polygon, properties))
@@ -1197,8 +1260,12 @@ class SceneRenderer:
                 self.paint(front, primitives, erase=True)
                 deck_cells |= self._cells(primitives, TRAIN_CLEARANCE_PX)
                 continue
-            if kind == "building":
-                primitives = self.building(geometry, properties)
+            if kind in {"building", "parts"}:
+                primitives = (
+                    self.building(geometry, properties)
+                    if kind == "building"
+                    else self.building_parts(*geometry, properties)
+                )
                 self.paint(building_layer, primitives)
                 self.paint(vegetation_layer, primitives, erase=True)
             else:
@@ -1219,9 +1286,18 @@ def render_layers(
     scene.set_precincts(layers.get("ground", []))
     rail = layers.get("rail", [])
     decks = scene.decks(layers["roads"], rail)
+    parts = parts_by_building(layers["buildings"], layers.get("building_parts", []))
     buildings, vegetation, front = scene.buildings_and_vegetation(
-        layers["buildings"], layers["trees"], decks
+        layers["buildings"], layers["trees"], decks, parts
     )
+    # A building drawn from parts casts each part's shadow, not its outline's.
+    shadow_buildings = [
+        item for item in layers["buildings"] if item[1]["source_id"] not in parts
+    ] + [
+        (piece, part | {"render_height_m": part["height_m"]})
+        for pieces in parts.values()
+        for piece, part in pieces
+    ]
     return {
         "terrain": scene.terrain(),
         "ground": scene.ground(layers.get("ground", [])),
@@ -1229,11 +1305,41 @@ def render_layers(
         "green": scene.green(layers["green"]),
         "roads": scene.roads(layers["roads"]),
         "rail": scene.rail(rail),
-        "shadows": scene.shadows(layers["buildings"], layers["trees"], decks),
+        "shadows": scene.shadows(shadow_buildings, layers["trees"], decks),
         "buildings": buildings,
         "vegetation": vegetation,
         "front": front,
     }
+
+
+def parts_by_building(
+    buildings: list[tuple[BaseGeometry, dict]], parts: list[tuple[BaseGeometry, dict]]
+) -> dict[str, list[tuple[Polygon, dict]]]:
+    """building:part pieces grouped under the building that contains them.
+
+    As in OSM's Simple 3D Buildings, a building with parts is drawn from its parts alone.
+    A building is listed only when every part inside it has a sourced height and min_height;
+    otherwise its outline is drawn as before, so no volume is dropped or guessed.
+    """
+    pieces = [(orient(polygon), properties) for g, properties in parts for polygon in _polygons(g)]
+    if not pieces:
+        return {}
+    tree = shapely.STRtree([polygon for polygon, _ in pieces])
+    grouped: dict[str, list[tuple[Polygon, dict]]] = {}
+    for geometry, properties in buildings:
+        inside = sorted(
+            (
+                pieces[index]
+                for index in tree.query(geometry)
+                if geometry.contains(pieces[index][0].representative_point())
+            ),
+            key=lambda piece: piece[1]["source_id"],
+        )
+        if inside and all(
+            part["height_m"] is not None and part["min_height_m"] is not None for _, part in inside
+        ):
+            grouped[properties["source_id"]] = inside
+    return grouped
 
 
 def composite(layers: dict[str, Image.Image], background: Color) -> Image.Image:
@@ -1249,6 +1355,7 @@ def load_layers(
 ) -> dict[str, list[tuple[BaseGeometry, dict]]]:
     files = {
         "buildings": "buildings.enriched.geojson",
+        "building_parts": "building_parts.geojson",
         "roads": "roads.geojson",
         "rail": "rail.geojson",
         "water": "water.geojson",
@@ -1264,7 +1371,7 @@ def load_layers(
         if name == "trees" and compact.exists()
         else world_geometries(processed_dir / file, bounds)
         for name, file in files.items()
-        if name not in {"ground", "rail"} or (processed_dir / file).exists()
+        if name not in {"ground", "rail", "building_parts"} or (processed_dir / file).exists()
     }
 
 

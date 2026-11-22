@@ -140,3 +140,34 @@ def test_protected_pois_protect_nearby_drawn_buildings_only(bounds):
     shapes = protected.protected_shapes(layers, pois, bounds)
     assert len(shapes) == 1 and shapes[0][0].contains(monument)
     assert protected.protected_shapes({"buildings": []}, pois, bounds) == []
+
+
+def test_a_temple_that_loses_its_gilding_or_roofs_is_unrecognisable():
+    drawing = np.zeros((64, 64, 3), dtype=np.uint8)
+    drawing[:, :] = (235, 230, 215)
+    drawing[8:24, 8:56] = (217, 119, 60)  # tiled temple roof
+    drawing[30:40, 20:44] = (232, 184, 58)  # gilding
+    mask = np.ones((64, 64), dtype=bool)
+    same = protected.recognisable(Image.fromarray(drawing), Image.fromarray(drawing), mask)
+    assert same["recognisable"]
+    greyed = drawing.copy()
+    greyed[30:40, 20:44] = (150, 150, 150)
+    greyed[8:24, 8:56] = (150, 150, 155)
+    result = protected.recognisable(Image.fromarray(drawing), Image.fromarray(greyed), mask)
+    assert not result["recognisable"]
+    assert {"gold", "temple_roof"} <= set(result["failed"])
+
+
+def test_places_group_a_compound_with_its_buildings(bounds):
+    compound = box(0, 0, 100, 100)
+    layers = {
+        "ground": [(compound, {"category": "religious", "source_id": "way/9", "name": "Wat"})],
+        "buildings": [
+            (box(40, 40, 50, 50), {"source_id": "way/1", "render_height_m": 12.0}),
+            (box(300, 300, 310, 310), {"source_id": "way/2", "category": "mosque"}),
+            (box(500, 500, 510, 510), {"source_id": "way/3", "category": "house"}),
+        ],
+    }
+    places = protected.sensitive_places(layers, [], bounds)
+    assert [place.id for place in places] == ["way/9", "way/2"]
+    assert len(places[0].shapes) == 2

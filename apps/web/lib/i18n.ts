@@ -61,7 +61,7 @@ const en = {
   howMade:
     "Every building, road, canal and tree comes from OpenStreetMap, with heights from Google Open Buildings and trees from a canopy map. A program draws them as an isometric map, so every place is where it really is.",
   aiNote: (model: string, coverage: number) =>
-    `AI art (beta) shows ordinary streets, buildings and trees redrawn by an AI image model, ${model}, over ${coverage}% of this map, including temples and palaces. It restyles textures and colours and can lose fine details such as gilded finials, so the plain drawing remains the reference. The AI can also add small invented details, so every painted square is checked against the drawing and discarded if anything moved. The plain drawing is the default; switch off AI art to return to it.`,
+    `AI art (beta) shows ordinary streets, buildings and trees redrawn by an AI image model, ${model}, over ${coverage}% of this map, including temples and palaces. It restyles textures and colours. Where it makes a temple, palace, shrine or mosque hard to recognise, for example by washing out its gilding, that place keeps the plain drawing. The AI can also add small invented details, so every painted square is checked against the drawing and discarded if anything moved. The plain drawing is the default; switch off AI art to return to it.`,
   shortcutsTitle: "Keyboard shortcuts",
   dataTitle: "Data and credits",
   madeBy: (name: string) => `Made by ${name}`,
@@ -123,7 +123,7 @@ const en = {
     ],
     [
       "Is AI used?",
-      "Only as an optional beta. The map is drawn by a program from open data, and that plain drawing is the default. On some maps, AI art (beta) repaints the map, temples and palaces included, with an open image model for a hand-painted look. It can lose fine details such as gilded finials, and every painted square is checked against the drawing and discarded if anything moved.",
+      "Only as an optional beta. The map is drawn by a program from open data, and that plain drawing is the default. On some maps, AI art (beta) repaints the map, temples and palaces included, with an open image model for a hand-painted look. Where it makes a temple, palace, shrine or mosque hard to recognise, that place keeps the plain drawing, and every painted square is checked against the drawing and discarded if anything moved.",
     ],
     [
       "Is it free to use?",
@@ -192,7 +192,7 @@ const th: Strings = {
   howMade:
     "อาคาร ถนน คลอง และต้นไม้ทุกแห่งมาจาก OpenStreetMap ความสูงอาคารจาก Google Open Buildings และต้นไม้จากแผนที่ความสูงเรือนยอด โปรแกรมวาดทั้งหมดเป็นแผนที่ไอโซเมตริก ทุกสถานที่จึงอยู่ตรงตำแหน่งจริง",
   aiNote: (model: string, coverage: number) =>
-    `ภาพ AI (ทดลอง) แสดงถนน อาคาร และต้นไม้ทั่วไปที่วาดใหม่ด้วยโมเดลสร้างภาพ AI ${model} ครอบคลุม ${coverage}% ของแผนที่นี้ รวมถึงวัดและพระราชวัง AI ปรับพื้นผิวและสี และอาจทำให้รายละเอียดเล็ก ๆ เช่น ช่อฟ้าปิดทอง หายไป ภาพวาดต้นฉบับจึงยังเป็นข้อมูลอ้างอิงหลัก AI อาจเติมรายละเอียดเล็ก ๆ ที่ไม่มีอยู่จริง ทุกส่วนที่วาดจึงถูกตรวจเทียบกับภาพวาดต้นฉบับ และตัดทิ้งหากตำแหน่งเคลื่อน ค่าเริ่มต้นคือภาพวาดต้นฉบับ ปิดภาพ AI เพื่อกลับไปดูได้`,
+    `ภาพ AI (ทดลอง) แสดงถนน อาคาร และต้นไม้ทั่วไปที่วาดใหม่ด้วยโมเดลสร้างภาพ AI ${model} ครอบคลุม ${coverage}% ของแผนที่นี้ รวมถึงวัดและพระราชวัง AI ปรับพื้นผิวและสี หากทำให้วัด พระราชวัง ศาลเจ้า หรือมัสยิดใดจำได้ยาก เช่น ทำให้ส่วนปิดทองซีดจาง สถานที่นั้นจะแสดงภาพวาดต้นฉบับแทน AI อาจเติมรายละเอียดเล็ก ๆ ที่ไม่มีอยู่จริง ทุกส่วนที่วาดจึงถูกตรวจเทียบกับภาพวาดต้นฉบับ และตัดทิ้งหากตำแหน่งเคลื่อน ค่าเริ่มต้นคือภาพวาดต้นฉบับ ปิดภาพ AI เพื่อกลับไปดูได้`,
   shortcutsTitle: "ปุ่มลัด",
   dataTitle: "ข้อมูลและเครดิต",
   madeBy: (name: string) => `สร้างโดย ${name}`,
@@ -254,7 +254,7 @@ const th: Strings = {
     ],
     [
       "ใช้ AI หรือเปล่า",
-      "ใช้เป็นตัวเลือกทดลองเท่านั้น แผนที่วาดด้วยโปรแกรมจากข้อมูลแบบเปิด และภาพวาดต้นฉบับเป็นค่าเริ่มต้น ในบางแผนที่ ภาพ AI (ทดลอง) วาดแผนที่ใหม่ รวมถึงวัดและพระราชวัง ด้วยโมเดลสร้างภาพแบบเปิด อาจทำให้รายละเอียดเล็ก ๆ เช่น ช่อฟ้าปิดทอง หายไป และทุกส่วนที่วาดถูกตรวจเทียบกับภาพวาดต้นฉบับ ตัดทิ้งหากตำแหน่งเคลื่อน",
+      "ใช้เป็นตัวเลือกทดลองเท่านั้น แผนที่วาดด้วยโปรแกรมจากข้อมูลแบบเปิด และภาพวาดต้นฉบับเป็นค่าเริ่มต้น ในบางแผนที่ ภาพ AI (ทดลอง) วาดแผนที่ใหม่ รวมถึงวัดและพระราชวัง ด้วยโมเดลสร้างภาพแบบเปิด หากทำให้วัด พระราชวัง ศาลเจ้า หรือมัสยิดใดจำได้ยาก สถานที่นั้นจะแสดงภาพวาดต้นฉบับแทน และทุกส่วนที่วาดถูกตรวจเทียบกับภาพวาดต้นฉบับ ตัดทิ้งหากตำแหน่งเคลื่อน",
     ],
     [
       "ใช้ฟรีไหม",

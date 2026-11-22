@@ -50,7 +50,7 @@ def run_ai_stage(
     limit: int,
     focus: str | None,
     engine: str = ai_repaint.DEFAULT_ENGINE,
-    protect: bool = False,
+    protect: str = "auto",
 ) -> None:
     area = load_area_config(area_id)
     config = load_render_config()
@@ -60,20 +60,32 @@ def run_ai_stage(
     shapes: list[protected.Shape] | None = None
 
     def protected_shapes() -> list[protected.Shape]:
+        """Places whose AI paint is never shown: all sensitive places with --protect all;
+        none with --protect none; with auto, those the AI made unrecognisable."""
         nonlocal shapes
-        if not protect:
-            return []
         if shapes is None:
-            shapes = protected.for_area(bounds, paths.processed_dir, paths.curated_dir)
+            if protect == "none":
+                shapes = []
+            elif protect == "all":
+                shapes = protected.for_area(bounds, paths.processed_dir, paths.curated_dir)
+            else:
+                shapes = ai_repaint.check_places(
+                    config,
+                    paths.build_dir,
+                    area,
+                    protected.places_for_area(bounds, paths.processed_dir, paths.curated_dir),
+                    protected.load_overrides(paths.curated_dir),
+                )
         return shapes
 
     background = np.array(parse_color(config.palette["background"])[:3], dtype=np.uint8)
 
     def ignore(box: tuple[int, int, int, int]) -> np.ndarray:
-        """Protected places (with --protect) and the blank area past the map's edge are never
-        shown from AI, so they are not judged."""
+        """Pixels never shown from AI, so not judged: the blank area past the map's edge, and
+        every sensitive place with --protect all. (With auto, places are judged as painted.)"""
         projection = IsoProjection.create(bounds, config)
-        keep = protected.rasterize(protected_shapes(), projection, box) > 0.5
+        always = protected_shapes() if protect == "all" else []
+        keep = protected.rasterize(always, projection, box) > 0.5
         drawing = np.asarray(read_region(paths.build_dir / "blocks", "master", box, "RGB"))
         blank = np.all(drawing == background, axis=-1).astype(np.float32)
         # The dithered edge mixes blank and drawn pixels; treat mostly blank areas as blank.
@@ -84,7 +96,7 @@ def run_ai_stage(
         return keep | (near > 0.3 * 255)
 
     def compose() -> None:
-        ai_repaint.compose(config, paths.build_dir, area, protected_shapes())
+        ai_repaint.compose(config, paths.build_dir, area, protected_shapes(), ignore)
 
     if stage == "ai-plan":
         point = (
@@ -162,8 +174,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--protect",
-        action="store_true",
-        help="AI stages: keep temples, palaces, mosques and monuments as drawn (see protected.py)",
+        choices=protected.PROTECT_MODES,
+        default="auto",
+        help="AI stages: sensitive places (temples, palaces, mosques, monuments) keep the "
+        "drawing: auto = only where the AI made them unrecognisable; all; none",
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")

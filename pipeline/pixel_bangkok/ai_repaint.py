@@ -232,8 +232,10 @@ WINDOW_FILES = (".in.png", ".png", ".raw.png", ".cond.png", ".mask.png", ".borde
 MAX_CHANGED_PX = 32
 
 
-def invalidate(build_dir: Path) -> list[str]:
+def invalidate(build_dir: Path, ignore: IgnoreMask | None = None) -> list[str]:
     """Drop windows whose procedural input changed by more than MAX_CHANGED_PX pixels.
+
+    Changes inside `ignore` (protected places, which always show the drawing) do not count.
 
     Their files move to windows/stale/ and the windows become pending again, so AI art is never
     composed over geometry that has since changed (for example newly drawn viaducts).
@@ -251,6 +253,8 @@ def invalidate(build_dir: Path) -> list[str]:
         current = np.asarray(read_region(blocks_dir, "master", box, "RGB"))
         with Image.open(source) as image:
             changed = np.any(np.asarray(image.convert("RGB")) != current, axis=-1)
+        if ignore is not None and changed.any():
+            changed &= ~ignore(box)
         if int(changed.sum()) <= MAX_CHANGED_PX:
             continue
         stale.append(window_id)
@@ -278,7 +282,7 @@ def run(
 ) -> dict[str, int]:
     """Process up to `limit` pending windows in batches; safe to stop and resume."""
     engine = ENGINES[engine_name]
-    invalidate(build_dir)
+    invalidate(build_dir, ignore)
     ai_dir = build_dir / "ai"
     blocks_dir = build_dir / "blocks"
     windows = json.loads((ai_dir / "plan.json").read_text(encoding="utf-8"))["windows"]
@@ -533,6 +537,7 @@ def compose(
     build_dir: Path,
     area: AreaConfig | None = None,
     shapes: list[protected.Shape] | None = None,
+    ignore: IgnoreMask | None = None,
 ) -> dict[str, Any]:
     """Blend accepted windows over the procedural master, block by block.
 
@@ -540,7 +545,7 @@ def compose(
     """
     from .pixelart import edge_dissolve, inside_area
 
-    invalidate(build_dir)
+    invalidate(build_dir, ignore)
     ai_dir = build_dir / "ai"
     blocks_dir = build_dir / "blocks"
     info = read_info(blocks_dir)
@@ -604,6 +609,86 @@ def compose(
     (ai_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     log.info("composed AI layer: %s", summary)
     return summary
+
+
+def check_places(
+    render: RenderConfig,
+    build_dir: Path,
+    area: AreaConfig,
+    places: list[protected.Place],
+    overrides: dict[str, set[str]],
+) -> list[protected.Shape]:
+    """Shapes of the sensitive places the AI made unrecognisable, plus curated ones.
+
+    Writes ai/places.json (every place's scores and decision) and ai/places-protected.png
+    (drawing beside AI for each protected place) for review.
+    """
+    ai_dir = build_dir / "ai"
+    blocks_dir = build_dir / "blocks"
+    info = read_info(blocks_dir)
+    size = (info["width"], info["height"])
+    accepted = _accepted(ai_dir, _load_state(ai_dir))
+    projection = IsoProjection.create(MapBounds.from_area(area), render)
+    shapes: list[protected.Shape] = []
+    report = []
+    review: list[tuple[str, Image.Image, Image.Image]] = []
+    for place in places:
+        entry: dict[str, Any] = {"id": place.id, "name": place.name}
+        if place.id in overrides["allow"]:
+            report.append(entry | {"decision": "painted (curated allow)"})
+            continue
+        if place.id in overrides["protect"]:
+            shapes += place.shapes
+            report.append(entry | {"decision": "protected (curated)"})
+            continue
+        box = protected.place_box(place, projection, size)
+        if box is None:
+            continue
+        blended, total = blend_region(ai_dir, accepted, box, size)
+        if not np.any(total > 0.5):
+            continue
+        drawing = read_region(blocks_dir, "master", box, "RGB")
+        painted = Image.fromarray(mix(np.asarray(drawing, dtype=np.float32), blended, total), "RGB")
+        mask = (protected.rasterize(place.shapes, projection, box) > 0.99) & (total > 0.5)
+        if not mask.any():
+            continue
+        metrics = protected.recognisable(drawing, painted, mask)
+        if metrics["recognisable"]:
+            report.append(entry | metrics | {"decision": "painted"})
+            continue
+        shapes += place.shapes
+        report.append(entry | metrics | {"decision": "protected (unrecognisable)"})
+        review.append((place.name or place.id, drawing, painted))
+    (ai_dir / "places.json").write_text(
+        json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8"
+    )
+    _review_sheet(review, ai_dir / "places-protected.png")
+    counts = {
+        decision: sum(1 for entry in report if entry["decision"] == decision)
+        for decision in sorted({entry["decision"] for entry in report})
+    }
+    log.info("sensitive places: %s", counts)
+    return shapes
+
+
+def _review_sheet(items: list[tuple[str, Image.Image, Image.Image]], path: Path) -> None:
+    from PIL import ImageDraw
+
+    if not items:
+        path.unlink(missing_ok=True)
+        return
+    tile = 320
+    items = items[:40]
+    sheet = Image.new("RGB", (2 * tile + 30, len(items) * (tile + 24)), (24, 22, 30))
+    draw = ImageDraw.Draw(sheet)
+    for row, (name, drawing, painted) in enumerate(items):
+        top = row * (tile + 24)
+        draw.text((6, top + 6), f"{name}: drawing | AI", fill="white")
+        for column, image in enumerate((drawing, painted)):
+            thumb = image.copy()
+            thumb.thumbnail((tile, tile))
+            sheet.paste(thumb, (column * (tile + 10) + 5, top + 22))
+    sheet.save(path)
 
 
 def default_focus(area: AreaConfig) -> tuple[float, float]:

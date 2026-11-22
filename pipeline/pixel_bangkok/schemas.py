@@ -36,6 +36,7 @@ class BuildingFeature(BaseProperties):
     height_source: NotRequired[str | None]
     height_note: NotRequired[str | None]
     roof_shape: NotRequired[RoofShape]
+    facade: NotRequired[Literal["plain"]]
 
 
 class RoadFeature(BaseProperties):

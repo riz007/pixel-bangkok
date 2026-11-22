@@ -17,6 +17,7 @@ def test_layers_and_counts(result):
     layers, stats = result
     assert {name: len(items) for name, items in layers.items()} == {
         "buildings": 5,
+        "building_parts": 1,
         "roads": 2,
         "rail": 0,
         "water": 2,
@@ -26,7 +27,7 @@ def test_layers_and_counts(result):
     }
     assert stats["skipped_duplicates"] == 1
     assert stats["skipped_outside_bounds"] == 1
-    assert stats["skipped_building_parts"] == 1
+    assert stats["building_parts_without_height"] == 1
     assert stats["skipped_unclassified"] == 2
     assert stats["repaired_invalid"] == 1
 
@@ -104,3 +105,21 @@ def test_palace_grounds_are_ground():
 
     assert _ground_category({"historic": "castle", "name": "Grand Palace"}) == "palace"
     assert _ground_category({"historic": "memorial"}) is None
+
+
+def test_building_parts_keep_only_sourced_vertical_extent():
+    from pixel_bangkok.normalise import building_part
+
+    assert building_part({"building:part": "yes", "height": "24"}) == {
+        "category": "yes",
+        "height_m": 24.0,
+        "min_height_m": 0.0,
+    }
+    raised = building_part({"building:part": "yes", "height": "40", "min_height": "12"})
+    assert raised["min_height_m"] == 12.0
+    assert building_part({"building:part": "yes"})["height_m"] is None
+    levels = building_part({"building:part": "yes", "height": "30", "building:min_level": "4"})
+    assert levels["min_height_m"] is None
+    inverted = building_part({"building:part": "yes", "height": "5", "min_height": "9"})
+    assert inverted["height_m"] is None
+    assert building_part({"building:part": "no", "height": "5"}) is None

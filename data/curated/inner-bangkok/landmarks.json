@@ -95,6 +95,13 @@
       "height_m": 204,
       "note": "Manual, sourced: English Wikipedia 'List of tallest buildings in Bangkok' (rank 35=, retrieved 2026-11-20) gives 204 m, 38 floors; matched to this OSM building by exact name. OSM has no height tag and the Open Buildings raster stops near 100 m.",
       "reference_url": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Bangkok"
+    },
+    {
+      "source_id": "way/867021614",
+      "name_en": "Democracy Monument",
+      "facade": "plain",
+      "note": "Manual drawing choice: a stone monument, drawn without windows or rooftop items. Its shape (four 24 m wings, a 7 m central turret and a 1 m plinth) comes from the OSM building:part ways inside this outline.",
+      "reference_url": "https://www.openstreetmap.org/way/867021614"
     }
   ]
 }

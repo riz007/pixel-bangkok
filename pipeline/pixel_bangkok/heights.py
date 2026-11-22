@@ -296,6 +296,8 @@ def run(
         properties["height_source"] = derived.height_source
         properties["height_note"] = derived.note
         properties["roof_shape"] = roof_shape(properties, manual)
+        if manual is not None and "facade" in manual:
+            properties["facade"] = manual["facade"]
         counts[derived.height_source or "unknown"] += 1
     for source_id in sorted(unused):
         log.warning("curated landmark override matches no building: %s", source_id)

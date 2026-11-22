@@ -37,8 +37,9 @@ Next.js site shows them. That drawing is the default view, and no AI image model
 Some maps also offer **AI art (beta)**, off by default. It repaints the map, temples and palaces
 included, with [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) and the
 [Isometric Mumbai](https://huggingface.co/Flash1405/isometric-mumbai) style (both Apache 2.0).
-It can lose fine details such as gilded finials, so the plain drawing stays the reference, and every
-painted square is checked against the drawing and dropped if anything moved.
+Where it makes a temple, palace, shrine or mosque hard to recognise (for example by washing out its
+gilding), that place keeps the plain drawing; `data/curated/<area>/ai_places.json` can force a place
+either way. Every painted square is also checked against the drawing and dropped if anything moved.
 
 ## Run it locally
 

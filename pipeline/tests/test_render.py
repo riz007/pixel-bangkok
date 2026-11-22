@@ -255,3 +255,55 @@ def test_buildings_in_temple_grounds_are_drawn_traditionally(bounds, render_conf
     assert "temple_trim" not in outside
     assert {"temple_trim"} <= inside
     assert inside & {"temple_roof", "temple_roof_dark"}
+
+
+def test_building_parts_replace_the_outline_only_when_all_heights_are_known(bounds, render_config):
+    from pixel_bangkok.render import parts_by_building
+
+    outline = box(0, 0, 20, 20)
+    building = (outline, {"source_id": "way/1"})
+    plinth = (box(0, 0, 20, 20), {"source_id": "way/2", "height_m": 1.0, "min_height_m": 0.0})
+    wing = (box(1, 1, 3, 3), {"source_id": "way/3", "height_m": 24.0, "min_height_m": 0.0})
+    grouped = parts_by_building([building], [plinth, wing])
+    assert [part["source_id"] for _, part in grouped["way/1"]] == ["way/2", "way/3"]
+    assert list(parts_by_building([building], [wing])) == ["way/1"]
+    unknown = (box(5, 5, 9, 9), {"source_id": "way/4", "height_m": None, "min_height_m": 0.0})
+    assert parts_by_building([building], [wing, unknown]) == {}
+
+
+def test_parts_are_drawn_to_their_own_heights(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    outline = box(100, 50, 120, 70)
+    properties = {
+        "source_id": "way/1",
+        "is_temple": False,
+        "category": "yes",
+        "render_height_m": 8.0,
+    }
+    parts = [
+        (box(100, 50, 120, 70), {"source_id": "way/2", "height_m": 1.0, "min_height_m": 0.0}),
+        (box(101, 51, 104, 54), {"source_id": "way/3", "height_m": 24.0, "min_height_m": 0.0}),
+        (box(110, 60, 114, 64), {"source_id": "way/4", "height_m": 9.0, "min_height_m": 6.0}),
+    ]
+    primitives = scene.building_parts(outline, parts, properties)
+    top = min(y for p in primitives for _, y in p.points) if primitives else None
+    assert top is not None
+    assert abs(top - scene.projection.world_to_native(101, 54, 24.0)[1]) < 30
+    floating = [p for p in primitives if p.kind == "polygon" and p.points and len(p.points) == 4]
+    assert floating
+
+
+def test_a_plinth_is_drawn_before_the_turret_standing_on_it(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    properties = {"source_id": "way/1", "is_temple": False, "category": "yes"}
+    properties |= {"render_height_m": 8.0, "facade": "plain"}
+    plinth = Point(110, 60).buffer(12)
+    turret = Point(110, 60).buffer(3.5)
+    parts = [
+        (turret, {"source_id": "way/2", "height_m": 7.0, "min_height_m": 0.0}),
+        (plinth, {"source_id": "way/3", "height_m": 1.0, "min_height_m": 0.0}),
+    ]
+    primitives = scene.building_parts(plinth, parts, properties)
+    tops = [p.z for p in primitives if p.kind == "area"]
+    assert tops[0] == 1.0 and tops[-1] == 7.0
+    assert not any(p.fill and "window" in p.fill for p in primitives)

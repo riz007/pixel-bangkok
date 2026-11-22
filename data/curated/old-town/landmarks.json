@@ -32,6 +32,13 @@
       "roof_shape": "prang",
       "note": "Manual drawing choice: one of the four satellite prangs around the central prang (OSM tags it a temple pagoda). Height is not overridden.",
       "reference_url": "https://www.openstreetmap.org/way/1148151957"
+    },
+    {
+      "source_id": "way/867021614",
+      "name_en": "Democracy Monument",
+      "facade": "plain",
+      "note": "Manual drawing choice: a stone monument, drawn without windows or rooftop items. Its shape (four 24 m wings, a 7 m central turret and a 1 m plinth) comes from the OSM building:part ways inside this outline.",
+      "reference_url": "https://www.openstreetmap.org/way/867021614"
     }
   ]
 }
