@@ -32,7 +32,13 @@ canal and tree is where it really is:
 - **Wikidata** for place names and descriptions
 
 A Python pipeline turns this data into one large isometric image and cuts it into map tiles, and a
-Next.js site shows them. No AI image model is involved, so nothing on the map is invented.
+Next.js site shows them. That drawing is the default view, and no AI image model is involved in it.
+
+Some maps also offer **AI art (beta)**, off by default. It repaints ordinary streets, buildings and
+trees with [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) and the
+[Isometric Mumbai](https://huggingface.co/Flash1405/isometric-mumbai) style (both Apache 2.0).
+Temples, palaces, mosques, monuments and military land are never repainted, and every painted square
+is checked against the drawing and dropped if anything moved.
 
 ## Run it locally
 
@@ -72,6 +78,8 @@ credits on every map:
 - Building heights: Google Open Buildings 2.5D Temporal, CC BY 4.0
 - Tree canopy: Meta and World Resources Institute, CC BY 4.0
 - Descriptions and some tower heights: Wikidata, CC0
+- AI art (beta): FLUX.2 klein 4B by Black Forest Labs and the Isometric Mumbai LoRA by flash1405, both
+  Apache 2.0
 
 Spot a mistake on the map? Use **Report** in the toolbar to fix it on OpenStreetMap; the fix
 shows up the next time the map is built.

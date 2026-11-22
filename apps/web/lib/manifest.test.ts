@@ -27,6 +27,22 @@ test("parses a valid manifest", () => {
   const withoutAnimation: Record<string, unknown> = { ...manifestFixture() };
   delete withoutAnimation.animation;
   assert.equal(parseManifest(withoutAnimation).animation, null);
+  assert.equal(manifest.ai, null);
+  const withAi = parseManifest({
+    ...manifestFixture(),
+    ai: {
+      url_template: "ai/{level}/{column}_{row}.{format}",
+      overlay_url_template: null,
+      model: "Test model",
+      licence: "Apache 2.0",
+      coverage: 0.25,
+    },
+  });
+  assert.equal(withAi.ai?.coverage, 0.25);
+  assert.throws(
+    () => parseManifest({ ...manifestFixture(), ai: { model: "x" } }),
+    /manifest\.ai\.url_template/,
+  );
   assert.equal(manifest.source.retrievedAt, "2026-01-01T00:00:00+00:00");
 });
 

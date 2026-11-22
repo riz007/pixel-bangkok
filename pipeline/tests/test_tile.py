@@ -135,7 +135,7 @@ def test_no_pyramid_is_written_into_working_folders():
     from pixel_bangkok.tile import PYRAMID_DIRS
 
     assert not set(PYRAMID_DIRS) & {"ai", "blocks", "layers"}
-    assert not any(name.startswith("ai") for name in PYRAMID_DIRS.values())
+    assert PYRAMID_DIRS["ai_tiles"] == "ai"
 
 
 def test_blank_tiles_are_not_written_and_presence_is_recorded(tmp_path):

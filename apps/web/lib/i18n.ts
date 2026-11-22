@@ -19,6 +19,7 @@ const en = {
   resultsCount: (n: number) =>
     n === 1 ? "1 place found" : `${n} places found`,
   places: "Places",
+  aiArt: "AI art (beta)",
   labels: "Labels",
   traffic: "Traffic",
   share: "Share",
@@ -59,6 +60,8 @@ const en = {
   howMadeTitle: "How it was made",
   howMade:
     "Every building, road, canal and tree comes from OpenStreetMap, with heights from Google Open Buildings and trees from a canopy map. A program draws them as an isometric map, so every place is where it really is.",
+  aiNote: (model: string, coverage: number) =>
+    `AI art (beta) shows ordinary streets, buildings and trees redrawn by an AI image model, ${model}, over ${coverage}% of this map. Temples, palaces, mosques, monuments and military land are never repainted and always show the original drawing. The AI can add small invented details, so every painted square is checked against the drawing and discarded if anything moved. The plain drawing is the default; switch off AI art to return to it.`,
   shortcutsTitle: "Keyboard shortcuts",
   dataTitle: "Data and credits",
   madeBy: (name: string) => `Made by ${name}`,
@@ -66,13 +69,19 @@ const en = {
   shortcuts: [
     ["/", "Search places or lat, long"],
     ["P", "Show or hide places"],
+    ["A", "AI art on or off"],
     ["L", "Labels on or off"],
     ["T", "Traffic and boats on or off"],
     ["F", "Full screen"],
     ["+ / −", "Zoom"],
     ["Esc", "Close"],
   ] as [string, string][],
+  aiOnLabel: "Show the plain drawing",
+  aiPartial: (percent: number) =>
+    `AI art covers about ${percent}% of this map so far. The rest stays as the plain drawing.`,
+  aiShowArea: "Show painted area",
   featuredHide: "Hide the Isometric Cities badge",
+  aiOffLabel: "Show AI art",
   trafficOnLabel: "Pause traffic and boats",
   trafficOffLabel: "Play traffic and boats",
   filterLabel: "Show places by type",
@@ -114,7 +123,7 @@ const en = {
     ],
     [
       "Is AI used?",
-      "No. Every building, road, canal and tree is drawn by a program from open map data, so nothing on the map is invented by an image model.",
+      "Only as an optional beta. The map is drawn by a program from open data, and that plain drawing is the default. On some maps, AI art (beta) repaints ordinary streets, buildings and trees with an open image model for a hand-painted look. Temples, palaces, mosques and monuments are never repainted, and every painted square is checked against the drawing and discarded if anything moved.",
     ],
     [
       "Is it free to use?",
@@ -141,6 +150,7 @@ const th: Strings = {
   searchNoResults: "ไม่พบสถานที่ ลองพิมพ์ชื่อภาษาไทยหรืออังกฤษ",
   resultsCount: (n: number) => `พบ ${n} แห่ง`,
   places: "สถานที่",
+  aiArt: "ภาพ AI (ทดลอง)",
   labels: "ป้ายชื่อ",
   traffic: "การจราจร",
   share: "แชร์",
@@ -181,6 +191,8 @@ const th: Strings = {
   howMadeTitle: "แผนที่นี้ทำอย่างไร",
   howMade:
     "อาคาร ถนน คลอง และต้นไม้ทุกแห่งมาจาก OpenStreetMap ความสูงอาคารจาก Google Open Buildings และต้นไม้จากแผนที่ความสูงเรือนยอด โปรแกรมวาดทั้งหมดเป็นแผนที่ไอโซเมตริก ทุกสถานที่จึงอยู่ตรงตำแหน่งจริง",
+  aiNote: (model: string, coverage: number) =>
+    `ภาพ AI (ทดลอง) แสดงถนน อาคาร และต้นไม้ทั่วไปที่วาดใหม่ด้วยโมเดลสร้างภาพ AI ${model} ครอบคลุม ${coverage}% ของแผนที่นี้ วัด พระราชวัง มัสยิด อนุสาวรีย์ และพื้นที่ทหาร จะไม่ถูกวาดใหม่และแสดงภาพวาดต้นฉบับเสมอ AI อาจเติมรายละเอียดเล็ก ๆ ที่ไม่มีอยู่จริง ทุกส่วนที่วาดจึงถูกตรวจเทียบกับภาพวาดต้นฉบับ และตัดทิ้งหากตำแหน่งเคลื่อน ค่าเริ่มต้นคือภาพวาดต้นฉบับ ปิดภาพ AI เพื่อกลับไปดูได้`,
   shortcutsTitle: "ปุ่มลัด",
   dataTitle: "ข้อมูลและเครดิต",
   madeBy: (name: string) => `สร้างโดย ${name}`,
@@ -188,13 +200,19 @@ const th: Strings = {
   shortcuts: [
     ["/", "ค้นหาสถานที่หรือพิกัด"],
     ["P", "แสดงหรือซ่อนสถานที่"],
+    ["A", "เปิดหรือปิดภาพ AI"],
     ["L", "เปิดหรือปิดป้ายชื่อ"],
     ["T", "เปิดหรือปิดรถและเรือ"],
     ["F", "เต็มจอ"],
     ["+ / −", "ซูม"],
     ["Esc", "ปิด"],
   ],
+  aiOnLabel: "ดูภาพวาดต้นฉบับ",
+  aiPartial: (percent: number) =>
+    `ภาพ AI ครอบคลุมราว ${percent}% ของแผนที่นี้ ส่วนที่เหลือยังเป็นภาพวาดต้นฉบับ`,
+  aiShowArea: "ดูบริเวณที่วาดแล้ว",
   featuredHide: "ซ่อนป้าย Isometric Cities",
+  aiOffLabel: "ดูภาพ AI",
   trafficOnLabel: "หยุดรถและเรือ",
   trafficOffLabel: "เล่นรถและเรือ",
   filterLabel: "แสดงสถานที่ตามประเภท",
@@ -236,7 +254,7 @@ const th: Strings = {
     ],
     [
       "ใช้ AI หรือเปล่า",
-      "ไม่ใช้ อาคาร ถนน คลอง และต้นไม้ทุกจุดวาดด้วยโปรแกรมจากข้อมูลแผนที่แบบเปิด จึงไม่มีสิ่งใดบนแผนที่ที่ถูกสร้างขึ้นโดยโมเดลสร้างภาพ",
+      "ใช้เป็นตัวเลือกทดลองเท่านั้น แผนที่วาดด้วยโปรแกรมจากข้อมูลแบบเปิด และภาพวาดต้นฉบับเป็นค่าเริ่มต้น ในบางแผนที่ ภาพ AI (ทดลอง) วาดถนน อาคาร และต้นไม้ทั่วไปใหม่ด้วยโมเดลสร้างภาพแบบเปิด วัด พระราชวัง มัสยิด และอนุสาวรีย์จะไม่ถูกวาดใหม่ และทุกส่วนที่วาดถูกตรวจเทียบกับภาพวาดต้นฉบับ ตัดทิ้งหากตำแหน่งเคลื่อน",
     ],
     [
       "ใช้ฟรีไหม",

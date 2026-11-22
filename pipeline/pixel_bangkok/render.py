@@ -69,8 +69,14 @@ SHADE_FACTOR = 0.62
 CONTACT_SHADOW_M = 0.9
 FOAM_INSET_M = 1.0
 ROOF_TILE_SPACING_M = 1.0
-PRANG_TERRACES = ((1.0, 0.0, 0.08), (0.84, 0.08, 0.16), (0.68, 0.16, 0.24))
-PRANG_TOWER = (0.24, 0.86, 9)
+# Prang proportions (fractions of footprint size and of total height), after the documented form
+# of Wat Arun's prangs: four stepped terraces, a corncob tower of tiered ledges that rounds over
+# at the top, and a thin metal finial (nabhasula) above it.
+PRANG_TERRACES = ((1.0, 0.0, 0.06), (0.86, 0.06, 0.13), (0.72, 0.13, 0.2), (0.58, 0.2, 0.26))
+PRANG_TOWER = (0.26, 0.84, 14)
+PRANG_TOWER_RADIUS = 0.42
+PRANG_LEDGE = 0.93
+PRANG_FINIAL = (0.06, 0.012)
 CHEDI_PLINTHS = ((1.0, 0.0, 0.1), (0.9, 0.1, 0.16))
 CHEDI_BELL = (0.16, 0.5, 6)
 CHEDI_HARMIKA = (0.3, 0.5, 0.56)
@@ -930,7 +936,7 @@ class SceneRenderer:
         return scale(Polygon(polygon.exterior), factor, factor, origin=polygon.centroid)
 
     def prang(self, polygon: Polygon, height: float) -> list[Primitive]:
-        """Stylised Khmer-style prang: stepped terraces, a bulging tiered tower, a spire."""
+        """Khmer-style prang: stepped terraces, a corncob tower of tiered ledges, a thin finial."""
         primitives = []
         for factor, bottom, top in PRANG_TERRACES:
             tier = self._scaled(polygon, factor)
@@ -940,23 +946,27 @@ class SceneRenderer:
         start, end, segments = PRANG_TOWER
 
         def radius(t: float) -> float:
-            return 0.5 * (1 - 0.75 * t**1.5) * (1 + 0.12 * math.sin(math.pi * t))
+            # Nearly upright at the base, rounding over towards the top like a corncob.
+            return PRANG_TOWER_RADIUS * max(1 - t**2.4, 0.0) ** 0.55 + PRANG_FINIAL[0]
 
         for index in range(segments):
             t0, t1 = index / segments, (index + 1) / segments
-            z0 = (start + (end - start) * t0) * height
-            z1 = (start + (end - start) * t1) * height
             primitives += self.frustum(
                 self._scaled(polygon, radius(t0)),
-                z0,
-                self._scaled(polygon, radius(t1) * 0.94),
-                z1,
+                (start + (end - start) * t0) * height,
+                self._scaled(polygon, radius(t1) * PRANG_LEDGE),
+                (start + (end - start) * t1) * height,
                 "temple_wall_light",
                 "temple_trim" if index % 2 else None,
             )
-        tip = self._scaled(polygon, radius(1.0) * 0.8)
+        base, tip = PRANG_FINIAL
         primitives += self.frustum(
-            tip, end * height, self._scaled(polygon, 0.01), height, None, "temple_trim"
+            self._scaled(polygon, base),
+            end * height,
+            self._scaled(polygon, tip),
+            height,
+            None,
+            "temple_trim",
         )
         return primitives
 

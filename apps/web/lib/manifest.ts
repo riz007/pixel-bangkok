@@ -35,6 +35,16 @@ export interface TileManifest {
     frontUrlTemplate: string | null;
     motionUrl: string | null;
   } | null;
+  ai: {
+    urlTemplate: string;
+    overlayUrlTemplate: string | null;
+    frontOverlayUrlTemplate: string | null;
+    model: string;
+    licence: string;
+    coverage: number;
+    focus: { lon: number; lat: number } | null;
+    version: string;
+  } | null;
   source: { dataset: string; retrievedAt: string | null };
   contentVersion: string;
 }
@@ -295,6 +305,46 @@ export function parseManifest(input: unknown): TileManifest {
             motionUrl: optionalText(value, "motion_url", "manifest.animation"),
           };
         })();
+  const ai =
+    root.ai === undefined
+      ? null
+      : (() => {
+          const value = object(root.ai, "manifest.ai");
+          return {
+            urlTemplate: text(value, "url_template", "manifest.ai"),
+            overlayUrlTemplate: optionalText(
+              value,
+              "overlay_url_template",
+              "manifest.ai",
+            ),
+            frontOverlayUrlTemplate: optionalText(
+              value,
+              "front_overlay_url_template",
+              "manifest.ai",
+            ),
+            model: text(value, "model", "manifest.ai"),
+            licence: text(value, "licence", "manifest.ai"),
+            coverage: number(value, "coverage", "manifest.ai"),
+            focus:
+              value.focus == null
+                ? null
+                : {
+                    lon: number(
+                      object(value.focus, "manifest.ai.focus"),
+                      "lon",
+                      "manifest.ai.focus",
+                    ),
+                    lat: number(
+                      object(value.focus, "manifest.ai.focus"),
+                      "lat",
+                      "manifest.ai.focus",
+                    ),
+                  },
+            version: (
+              optionalText(value, "composed_at", "manifest.ai") ?? "ai"
+            ).replace(/\D/g, ""),
+          };
+        })();
   const source = object(root.source, "manifest.source");
   const levels = list(tiles, "levels", "manifest.tiles").map((entry, index) => {
     const context = `manifest.tiles.levels[${index}]`;
@@ -350,6 +400,7 @@ export function parseManifest(input: unknown): TileManifest {
       geographic,
     },
     animation,
+    ai,
     contentVersion: (() => {
       const generated = root.generated;
       if (typeof generated !== "object" || generated === null) return "0";

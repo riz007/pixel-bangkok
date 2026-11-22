@@ -13,6 +13,20 @@ const ICONS: Record<string, string[]> = {
     ".......##.......",
     "................",
   ],
+  ai: [
+    ".......#........",
+    ".......#........",
+    "......###.......",
+    "..#####.#####...",
+    "......###.......",
+    ".......#....#...",
+    ".......#...###..",
+    "............#...",
+    "...#............",
+    "..###...........",
+    "...#............",
+    "................",
+  ],
   labels: [
     "................",
     ".##########.....",
@@ -144,17 +158,10 @@ const ICONS: Record<string, string[]> = {
 export function PixelIcon({ name }: { name: keyof typeof ICONS | string }) {
   const rows = ICONS[name] ?? ICONS.about!;
   return (
-    <svg
-      className="pixel-icon"
-      viewBox="0 0 16 12"
-      aria-hidden="true"
-      shapeRendering="crispEdges"
-    >
+    <svg className="pixel-icon" viewBox="0 0 16 12" aria-hidden="true" shapeRendering="crispEdges">
       {rows.flatMap((row, y) =>
         [...row].map((cell, x) =>
-          cell === "#" ? (
-            <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" />
-          ) : null,
+          cell === "#" ? <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" /> : null,
         ),
       )}
     </svg>

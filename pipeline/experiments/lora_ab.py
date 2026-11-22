@@ -49,7 +49,7 @@ def main() -> int:
             )
         )
         command = [
-            str(ai_repaint.DEFAULT_MFLUX_PYTHON),
+            str(ai_repaint.ENGINES["qwen"].python),
             str(Path("pipeline/experiments/mflux_worker.py").resolve()),
             str(jobs),
             "--quantize",

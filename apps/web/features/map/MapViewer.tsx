@@ -47,6 +47,7 @@ interface MapViewerProps {
   pois: PointOfInterest[];
   selectedPoiId: string | null;
   onSelectPoi: (id: string) => void;
+  aiOn: boolean;
   playing: boolean;
   showLabels: boolean;
   lang: Lang;
@@ -83,6 +84,30 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+function layerVersion(manifest: TileManifest, aiOn: boolean): string {
+  return aiOn && manifest.ai
+    ? `${manifest.contentVersion}-${manifest.ai.version}`
+    : manifest.contentVersion;
+}
+
+function baseTemplate(manifest: TileManifest, aiOn: boolean): string {
+  return aiOn && manifest.ai
+    ? manifest.ai.urlTemplate
+    : manifest.tiles.urlTemplate;
+}
+
+function overlayTemplate(manifest: TileManifest, aiOn: boolean): string | null {
+  if (aiOn && manifest.ai?.overlayUrlTemplate)
+    return manifest.ai.overlayUrlTemplate;
+  return manifest.animation?.overlayUrlTemplate ?? null;
+}
+
+function frontTemplate(manifest: TileManifest, aiOn: boolean): string | null {
+  if (aiOn && manifest.ai?.frontOverlayUrlTemplate)
+    return manifest.ai.frontOverlayUrlTemplate;
+  return manifest.animation?.frontUrlTemplate ?? null;
+}
+
 async function loadMotion(url: string) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} responded with ${response.status}`);
@@ -95,6 +120,7 @@ export function MapViewer({
   pois,
   selectedPoiId,
   onSelectPoi,
+  aiOn,
   playing,
   showLabels,
   lang,
@@ -115,6 +141,8 @@ export function MapViewer({
   const animationRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const trafficRef = useRef<TrafficLayer | null>(null);
+  const overlayViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+  const frontViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const upperRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLDivElement>(null);
   const navigatorId = `map-navigator-${useId().replace(/:/g, "")}`;
@@ -122,6 +150,7 @@ export function MapViewer({
   const [failedTiles, setFailedTiles] = useState(0);
   const [noticeDismissed, setNoticeDismissed] = useState(false);
   const playingRef = useRef(playing);
+  const aiOnRef = useRef(aiOn);
   const selectedRef = useRef(selectedPoiId);
   const tourRef = useRef(tourNumbers);
   const availableRef = useRef(onAnimationAvailable);
@@ -153,8 +182,8 @@ export function MapViewer({
           tileSources: tileSourceOptions(
             manifest,
             baseUrl,
-            manifest.tiles.urlTemplate,
-            manifest.contentVersion,
+            baseTemplate(manifest, aiOnRef.current),
+            layerVersion(manifest, aiOnRef.current),
           ) as unknown as OpenSeadragon.TileSourceOptions,
           drawer: "canvas",
           imageSmoothingEnabled: false,
@@ -303,7 +332,7 @@ export function MapViewer({
               manifest,
               baseUrl,
               template,
-              manifest.contentVersion,
+              layerVersion(manifest, aiOnRef.current),
             ) as unknown as OpenSeadragon.TileSourceOptions,
             drawer: "canvas",
             imageSmoothingEnabled: false,
@@ -338,13 +367,15 @@ export function MapViewer({
           smoothing = null;
           return follower;
         };
-        const template = animation.overlayUrlTemplate ?? null;
+        const template = overlayTemplate(manifest, aiOnRef.current);
         if (template) {
           overlay = follow(overlayContainer, template);
+          overlayViewerRef.current = overlay;
         }
-        const frontTemplateValue = animation.frontUrlTemplate ?? null;
+        const frontTemplateValue = frontTemplate(manifest, aiOnRef.current);
         if (frontTemplateValue && frontRef.current) {
           front = follow(frontRef.current, frontTemplateValue);
+          frontViewerRef.current = front;
         }
         loadMotion(
           `${baseUrl}/${animation.motionUrl}?v=${manifest.contentVersion}-${MOTION_FORMAT}`,
@@ -382,12 +413,41 @@ export function MapViewer({
       focusRef.current = null;
       trafficRef.current?.destroy();
       trafficRef.current = null;
+      overlayViewerRef.current = null;
+      frontViewerRef.current = null;
       overlay?.destroy();
       front?.destroy();
       navigatorObserver?.disconnect();
       viewer?.destroy();
     };
   }, [manifest, baseUrl, pois, navigatorId, commandsRef]);
+
+  useEffect(() => {
+    if (aiOnRef.current === aiOn) return;
+    aiOnRef.current = aiOn;
+    const swap = (
+      viewer: OpenSeadragon.Viewer | null,
+      template: string | null,
+    ) => {
+      if (!viewer || !template || !viewer.isOpen()) return;
+      const previous = viewer.world.getItemAt(0);
+      viewer.addTiledImage({
+        tileSource: tileSourceOptions(
+          manifest,
+          baseUrl,
+          template,
+          layerVersion(manifest, aiOn),
+        ) as unknown as OpenSeadragon.TileSourceOptions,
+        index: 0,
+        success: () => {
+          if (previous) viewer.world.removeItem(previous);
+        },
+      });
+    };
+    swap(viewerRef.current, baseTemplate(manifest, aiOn));
+    swap(overlayViewerRef.current, overlayTemplate(manifest, aiOn));
+    swap(frontViewerRef.current, frontTemplate(manifest, aiOn));
+  }, [aiOn, manifest, baseUrl]);
 
   useEffect(() => {
     playingRef.current = playing;

@@ -482,6 +482,31 @@ test("About shows the Isometric Cities badge", async ({ page }) => {
   await expect(badge).toHaveAttribute("href", "https://isometriccities.com/");
 });
 
+test("AI art is off by default and switches the map to AI tiles", async ({
+  page,
+}) => {
+  const manifest = await (
+    await page.request.get("/maps/old-town/manifest.json")
+  ).json();
+  test.skip(!manifest.ai, "no AI layer published for old-town");
+  const requests: string[] = [];
+  page.on("request", (request) => requests.push(new URL(request.url()).pathname));
+  await page.goto("/?area=old-town");
+  await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  const toggle = page.getByRole("button", { name: "Show AI art" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  expect(requests.some((path) => path.startsWith("/maps/old-town/ai/"))).toBe(
+    false,
+  );
+  await toggle.click();
+  await expect(
+    page.getByRole("button", { name: "Show the plain drawing" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() => requests.some((path) => path.startsWith("/maps/old-town/ai/")))
+    .toBe(true);
+});
+
 test("the Isometric Cities badge shows on the map and stays hidden once dismissed", async ({
   page,
 }) => {

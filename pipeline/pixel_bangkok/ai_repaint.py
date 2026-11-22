@@ -1,9 +1,12 @@
 """Optional stage: AI repaint of the procedural map, window by window.
 
 Not part of `all`; the procedural map stays the published default and the
-geometry reference. Model: Qwen-Image 2.1 Turbo via mflux, run by
-experiments/mflux_worker.py in the mflux tool environment (research licence,
-non-commercial use only).
+geometry reference. Two engines, both run through mflux by a worker script in
+experiments/:
+  mumbai  FLUX.2 [klein] 4B with the Isometric Mumbai style LoRA at 0.7 (Apache 2.0)
+  qwen    Qwen-Image 2.1 Turbo (research licence, non-commercial use only)
+Sensitive places (see protected.py) are never repainted: compose keeps the
+drawing there.
 
 build/<area>/ai/
   plan.json           windows in processing order
@@ -22,6 +25,7 @@ import math
 import os
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,7 +34,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageFilter
 
-from . import drift
+from . import drift, protected
 from .blocks import blocks_of, read_info, read_region
 from .config import AreaConfig, RenderConfig
 from .crs import MapBounds
@@ -46,7 +50,6 @@ PRESERVE_WEIGHT = 0.5
 MAX_BACKGROUND_FRACTION = 0.6
 STRENGTH = 0.6
 RETRY_STRENGTH = 0.45
-MAX_ATTEMPTS = 2
 OUTLINE_RGB = (0x2A, 0x24, 0x30)
 STEPS = 12
 QUANTIZE = 4
@@ -59,8 +62,74 @@ PROMPT = (
     "Only refine edges, shading and texture. Do not add any objects: no cars, people, rooftop "
     "equipment, boats or extra trees. No text."
 )
-WORKER = Path(__file__).resolve().parents[1] / "experiments" / "mflux_worker.py"
-DEFAULT_MFLUX_PYTHON = Path.home() / ".local/share/uv/tools/mflux/bin/python"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+EXPERIMENTS = REPO_ROOT / "pipeline" / "experiments"
+BORDER_RGB = (255, 0, 0)
+BORDER_PX = 2
+
+
+@dataclass(frozen=True)
+class Engine:
+    name: str
+    model: str
+    licence: str
+    prompt: str
+    worker: Path
+    python: Path
+    steps: int
+    strengths: tuple[float | None, ...]
+    """Image strength per attempt; None means a pure reference edit."""
+    extra_args: tuple[str, ...] = ()
+    border: bool = False
+    """Mark the area to paint with a red box, as the Mumbai LoRA was trained to expect."""
+    neighbours: bool = False
+    """Condition on finished neighbours with an inpaint mask (needs mask support)."""
+
+
+MUMBAI_LORA = REPO_ROOT / "build" / ".models" / "isometric-mumbai-klein-v2.safetensors"
+ENGINES = {
+    "qwen": Engine(
+        name="qwen",
+        model=MODEL,
+        licence=LICENCE,
+        prompt=PROMPT,
+        worker=EXPERIMENTS / "mflux_worker.py",
+        python=Path.home() / ".local/share/uv/tools/mflux/bin/python",
+        steps=STEPS,
+        strengths=(STRENGTH, RETRY_STRENGTH),
+        extra_args=("--quantize", str(QUANTIZE)),
+        neighbours=True,
+    ),
+    "mumbai": Engine(
+        name="mumbai",
+        model="FLUX.2 [klein] 4B with the Isometric Mumbai style",
+        licence="Apache 2.0 (FLUX.2 klein 4B; Isometric Mumbai LoRA by flash1405)",
+        prompt=(
+            "Fill in the outlined section with the missing pixels corresponding to the "
+            "<isometric nyc pixel art> style, removing the border and exactly following the "
+            "shape/style/structure of the surrounding image (if present). "
+            "No cars, no vehicles, no people."
+        ),
+        worker=EXPERIMENTS / "flux2_worker.py",
+        python=REPO_ROOT / "build" / ".tools" / "mflux-main" / "bin" / "python",
+        steps=4,
+        strengths=(None, None),
+        extra_args=("--quantize", "8", "--lora", str(MUMBAI_LORA), "--lora-scale", "0.7"),
+        border=True,
+    ),
+}
+DEFAULT_ENGINE = "mumbai"
+
+
+def with_border(image: Image.Image) -> Image.Image:
+    framed = image.convert("RGB").copy()
+    width, height = framed.size
+    pixels = np.asarray(framed).copy()
+    pixels[:BORDER_PX, :] = BORDER_RGB
+    pixels[-BORDER_PX:, :] = BORDER_RGB
+    pixels[:, :BORDER_PX] = BORDER_RGB
+    pixels[:, -BORDER_PX:] = BORDER_RGB
+    return Image.fromarray(pixels, "RGB")
 
 
 @dataclass(frozen=True)
@@ -144,16 +213,22 @@ def finish(reference: Image.Image, painted: Image.Image) -> Image.Image:
     return Image.fromarray(out)
 
 
-def judge(reference: Image.Image, raw: Image.Image) -> tuple[Image.Image, dict[str, Any]]:
+IgnoreMask = Callable[[tuple[int, int, int, int]], np.ndarray]
+"""Boolean mask over a window box of pixels that are never shown from the AI layer."""
+
+
+def judge(
+    reference: Image.Image, raw: Image.Image, ignore: np.ndarray | None = None
+) -> tuple[Image.Image, dict[str, Any]]:
     """Undo a small uniform offset, then measure drift against the input."""
     resized = raw.convert("RGB").resize(reference.size, Image.Resampling.LANCZOS)
     aligned, dx, dy = drift.register(reference, resized)
-    metrics = drift.drift(reference, aligned)
+    metrics = drift.drift(reference, aligned, ignore)
     metrics["registered_px"] = [dx, dy]
     return aligned, metrics
 
 
-WINDOW_FILES = (".in.png", ".png", ".raw.png", ".cond.png", ".mask.png")
+WINDOW_FILES = (".in.png", ".png", ".raw.png", ".cond.png", ".mask.png", ".border.png")
 MAX_CHANGED_PX = 32
 
 
@@ -194,34 +269,55 @@ def invalidate(build_dir: Path) -> list[str]:
     return stale
 
 
-def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
+def run(
+    build_dir: Path,
+    limit: int,
+    batch: int = 8,
+    engine_name: str = DEFAULT_ENGINE,
+    ignore: IgnoreMask | None = None,
+) -> dict[str, int]:
     """Process up to `limit` pending windows in batches; safe to stop and resume."""
+    engine = ENGINES[engine_name]
     invalidate(build_dir)
     ai_dir = build_dir / "ai"
     blocks_dir = build_dir / "blocks"
     windows = json.loads((ai_dir / "plan.json").read_text(encoding="utf-8"))["windows"]
     info = read_info(blocks_dir)
     state = _load_state(ai_dir)
+    previous = state.get("engine", "qwen") if state["windows"] else engine.name
+    if previous != engine.name:
+        raise RuntimeError(
+            f"{ai_dir} holds windows painted by the {previous} engine; move it aside "
+            f"(for example to ai-{previous}) before painting with {engine.name}"
+        )
     state.update(
-        {"model": MODEL, "licence": LICENCE, "prompt": PROMPT, "strength": STRENGTH, "steps": STEPS}
+        {
+            "engine": engine.name,
+            "model": engine.model,
+            "licence": engine.licence,
+            "prompt": engine.prompt,
+            "strengths": list(engine.strengths),
+            "steps": engine.steps,
+        }
     )
 
     def attempts(window_id: str) -> int:
         entry = state["windows"].get(window_id)
         return 0 if entry is None else int(entry.get("attempts", 1))
 
+    attempts_allowed = len(engine.strengths)
     pending = [
         w
         for w in windows
         if w["id"] not in state["windows"]
-        or (not state["windows"][w["id"]]["accepted"] and attempts(w["id"]) < MAX_ATTEMPTS)
+        or (not state["windows"][w["id"]]["accepted"] and attempts(w["id"]) < attempts_allowed)
     ][:limit]
-    python = Path(os.environ.get("PIXEL_BANGKOK_MFLUX_PYTHON", DEFAULT_MFLUX_PYTHON))
+    python = Path(os.environ.get("PIXEL_BANGKOK_MFLUX_PYTHON", engine.python))
     if pending and not python.exists():
         raise FileNotFoundError(f"mflux python not found at {python}; `uv tool install mflux`")
     windows_dir = ai_dir / "windows"
     windows_dir.mkdir(parents=True, exist_ok=True)
-    (ai_dir / "prompt.txt").write_text(PROMPT, encoding="utf-8")
+    (ai_dir / "prompt.txt").write_text(engine.prompt, encoding="utf-8")
     counts = {"accepted": 0, "rejected": 0}
     for start in range(0, len(pending), batch):
         chunk = pending[start : start + batch]
@@ -236,11 +332,17 @@ def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
             source = windows_dir / f"{window['id']}.in.png"
             if not source.exists():
                 read_region(blocks_dir, "master", box, "RGB").save(source)
-            with Image.open(source) as procedural:
-                conditioned = condition_on_neighbours(
-                    ai_dir, state, window, procedural, (info["width"], info["height"])
-                )
+            conditioned = None
+            if engine.neighbours:
+                with Image.open(source) as procedural:
+                    conditioned = condition_on_neighbours(
+                        ai_dir, state, window, procedural, (info["width"], info["height"])
+                    )
             model_input, mask_path = source, None
+            if engine.border:
+                model_input = windows_dir / f"{window['id']}.border.png"
+                with Image.open(source) as procedural:
+                    with_border(procedural).save(model_input)
             if conditioned is not None:
                 model_input = windows_dir / f"{window['id']}.cond.png"
                 mask_path = windows_dir / f"{window['id']}.mask.png"
@@ -250,28 +352,27 @@ def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
             raw_path = windows_dir / f"{window['id']}.raw.png"
             if attempt > 1 and raw_path.exists():
                 raw_path.unlink()
-            jobs.append(
-                {
-                    "input": str(model_input),
-                    "mask": str(mask_path) if mask_path else None,
-                    "output": str(raw_path),
-                    "seed": SEED + attempt - 1,
-                    "strength": STRENGTH if attempt == 1 else RETRY_STRENGTH,
-                    "attempt": attempt,
-                }
-            )
+            job: dict[str, Any] = {
+                "input": str(model_input),
+                "mask": str(mask_path) if mask_path else None,
+                "output": str(raw_path),
+                "seed": SEED + attempt - 1,
+                "attempt": attempt,
+            }
+            if engine.strengths[attempt - 1] is not None:
+                job["strength"] = engine.strengths[attempt - 1]
+            jobs.append(job)
         jobs_path = ai_dir / "jobs.jsonl"
         jobs_path.write_text("\n".join(json.dumps(job) for job in jobs), encoding="utf-8")
         began = time.monotonic()
         subprocess.run(
             [
                 str(python),
-                str(WORKER),
+                str(engine.worker),
                 str(jobs_path),
-                "--quantize",
-                str(QUANTIZE),
+                *engine.extra_args,
                 "--steps",
-                str(STEPS),
+                str(engine.steps),
                 "--prompt-file",
                 str(ai_dir / "prompt.txt"),
             ],
@@ -285,7 +386,8 @@ def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
                 Image.open(windows_dir / f"{window['id']}.raw.png") as raw,
             ):
                 drawing = reference.convert("RGB")
-                snapped, metrics = judge(drawing, raw)
+                mask = ignore(_box(window)) if ignore is not None else None
+                snapped, metrics = judge(drawing, raw, mask)
             accepted = bool(metrics["passes"])
             if accepted:
                 finish(drawing, snapped).save(windows_dir / f"{window['id']}.png")
@@ -294,7 +396,7 @@ def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
                 "top": window["top"],
                 "accepted": accepted,
                 "attempts": job["attempt"],
-                "strength": job["strength"],
+                "strength": job.get("strength"),
                 "seconds": round(seconds, 1),
                 "finished_at": datetime.now(UTC).isoformat(timespec="seconds"),
                 **metrics,
@@ -310,6 +412,40 @@ def run(build_dir: Path, limit: int, batch: int = 8) -> dict[str, int]:
             counts["rejected"],
             seconds,
         )
+    return counts
+
+
+def _box(window: dict[str, Any]) -> tuple[int, int, int, int]:
+    return (window["left"], window["top"], window["left"] + WINDOW_PX, window["top"] + WINDOW_PX)
+
+
+def rejudge(build_dir: Path, ignore: IgnoreMask) -> dict[str, int]:
+    """Judge every painted window again, ignoring protected places; no repainting."""
+    ai_dir = build_dir / "ai"
+    windows_dir = ai_dir / "windows"
+    state = _load_state(ai_dir)
+    counts = {"accepted": 0, "rejected": 0, "changed": 0}
+    for window_id, entry in sorted(state["windows"].items()):
+        raw_path = windows_dir / f"{window_id}.raw.png"
+        if not raw_path.exists():
+            continue
+        with (
+            Image.open(windows_dir / f"{window_id}.in.png") as reference,
+            Image.open(raw_path) as raw,
+        ):
+            drawing = reference.convert("RGB")
+            snapped, metrics = judge(drawing, raw, ignore(_box(entry)))
+        accepted = bool(metrics["passes"])
+        finished = windows_dir / f"{window_id}.png"
+        if accepted:
+            finish(drawing, snapped).save(finished)
+        elif finished.exists():
+            finished.unlink()
+        counts["changed"] += accepted != entry["accepted"]
+        counts["accepted" if accepted else "rejected"] += 1
+        entry.update({**metrics, "accepted": accepted})
+    _save_state(ai_dir, state)
+    log.info("re-judged AI windows: %s", counts)
     return counts
 
 
@@ -393,9 +529,15 @@ def condition_on_neighbours(
 
 
 def compose(
-    render: RenderConfig, build_dir: Path, area: AreaConfig | None = None
+    render: RenderConfig,
+    build_dir: Path,
+    area: AreaConfig | None = None,
+    shapes: list[protected.Shape] | None = None,
 ) -> dict[str, Any]:
-    """Blend accepted windows over the procedural master, block by block."""
+    """Blend accepted windows over the procedural master, block by block.
+
+    Wherever `shapes` (protected places) cover the image, the drawing is kept unchanged.
+    """
     from .pixelart import edge_dissolve, inside_area
 
     invalidate(build_dir)
@@ -405,12 +547,20 @@ def compose(
     state = _load_state(ai_dir)
     accepted = _accepted(ai_dir, state)
     covered = 0
+    mapped = 0
     size = (info["width"], info["height"])
     for block in blocks_of(info):
         with Image.open(blocks_dir / f"master_{block.name}.png") as image:
             procedural = np.asarray(image.convert("RGB"), dtype=np.float32)
         box = (block.left, block.top, block.left + block.width, block.top + block.height)
         blended, total = blend_region(ai_dir, accepted, box, size)
+        if shapes and area is not None:
+            projection = IsoProjection.create(MapBounds.from_area(area), render)
+            keep = protected.rasterize(shapes, projection, box)
+            Image.fromarray((keep * 255).astype(np.uint8), "L").save(
+                ai_dir / f"protected_{block.name}.png"
+            )
+            total = total * (1.0 - keep)
         result = mix(procedural, blended, total)
         dissolve = (
             edge_dissolve(MapBounds.from_area(area), render, box)
@@ -418,8 +568,15 @@ def compose(
             else np.zeros(result.shape[:2], dtype=bool)
         )
         result[dissolve] = np.array(parse_color(render.palette["background"])[:3], np.uint8)
-        cover = dissolve & inside_area(MapBounds.from_area(area), render, box) if area else dissolve
-        covered += int(np.count_nonzero(total > 0))
+        inside = (
+            inside_area(MapBounds.from_area(area), render, box)
+            if area is not None
+            else np.ones(result.shape[:2], dtype=bool)
+        )
+        cover = dissolve & inside
+        # Share of the map itself (not the blank margin) that shows AI art.
+        covered += int(np.count_nonzero((total > 0.5) & inside & ~dissolve))
+        mapped += int(np.count_nonzero(inside & ~dissolve))
         master = Image.fromarray(result, "RGB")
         master.save(blocks_dir / f"ai_master_{block.name}.png")
         with Image.open(blocks_dir / f"occlusion_{block.name}.png") as occlusion:
@@ -435,11 +592,13 @@ def compose(
                 blocks_dir / f"ai_front_overlay_{block.name}.png"
             )
     summary = {
-        "model": MODEL,
-        "licence": LICENCE,
+        "engine": state.get("engine", "qwen"),
+        "model": state.get("model", MODEL),
+        "licence": state.get("licence", LICENCE),
+        "protected_shapes": len(shapes or []),
         "windows_accepted": len(accepted),
         "windows_rejected": sum(1 for e in state["windows"].values() if not e["accepted"]),
-        "coverage": round(covered / (info["width"] * info["height"]), 4),
+        "coverage": round(covered / max(mapped, 1), 4),
         "composed_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     (ai_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

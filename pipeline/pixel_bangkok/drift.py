@@ -12,6 +12,12 @@ EDGE_TOLERANCE_PX = 2
 BLOCK_PX = 128
 MAX_LOCAL_SHIFT_PX = 2
 MIN_EDGE_RECALL = 0.9
+MIN_EDGE_PRECISION = 0.8
+"""Share of the repaint's edges that lie on the drawing's edges; low means invented outlines."""
+MIN_STRUCTURE_FRACTION = 0.02
+"""Blocks with fewer strong-gradient pixels than this (open water, plain ground) have nothing
+to align, so a style that adds texture there would always fail to match; edges still count."""
+STRONG_GRADIENT = 24.0
 MIN_MATCH_PEAK = 0.1
 MAX_UNMATCHED_FRACTION = 0.3
 MAX_REGISTRATION_PX = 8
@@ -25,6 +31,12 @@ def luminance_edges(image: Image.Image) -> np.ndarray:
     gy[1:-1, :] = grey[2:, :] - grey[:-2, :]
     magnitude = np.hypot(gx, gy)
     return magnitude > max(24.0, float(np.percentile(magnitude, 85)))
+
+
+def structure(grey: np.ndarray) -> float:
+    gx = np.abs(np.diff(grey, axis=1))
+    gy = np.abs(np.diff(grey, axis=0))
+    return float(((gx[:-1, :] > STRONG_GRADIENT) | (gy[:, :-1] > STRONG_GRADIENT)).mean())
 
 
 def dilate(mask: np.ndarray, radius: int) -> np.ndarray:
@@ -73,15 +85,25 @@ def register(reference: Image.Image, repainted: Image.Image) -> tuple[Image.Imag
     return Image.fromarray(shifted, repainted.mode), dx, dy
 
 
-def local_shifts(reference: np.ndarray, repainted: np.ndarray) -> tuple[list[tuple[int, int]], int]:
-    """Confident per-block shifts, and the number of textured blocks with no confident match."""
+def local_shifts(
+    reference: np.ndarray, repainted: np.ndarray, ignore: np.ndarray | None = None
+) -> tuple[list[tuple[int, int]], int]:
+    """Confident per-block shifts, and the number of textured blocks with no confident match.
+
+    Blocks mostly covered by `ignore` (places whose AI paint is never shown) are skipped.
+    """
     shifts = []
     unmatched = 0
     for top in range(0, reference.shape[0] - BLOCK_PX + 1, BLOCK_PX):
         for left in range(0, reference.shape[1] - BLOCK_PX + 1, BLOCK_PX):
+            if (
+                ignore is not None
+                and ignore[top : top + BLOCK_PX, left : left + BLOCK_PX].mean() > 0.5
+            ):
+                continue
             a = reference[top : top + BLOCK_PX, left : left + BLOCK_PX]
             b = repainted[top : top + BLOCK_PX, left : left + BLOCK_PX]
-            if a.std() < 5:
+            if a.std() < 5 or structure(a) < MIN_STRUCTURE_FRACTION:
                 continue
             dx, dy, peak = phase_match(a, b)
             if peak < MIN_MATCH_PEAK:
@@ -91,13 +113,19 @@ def local_shifts(reference: np.ndarray, repainted: np.ndarray) -> tuple[list[tup
     return shifts, unmatched
 
 
-def drift(reference: Image.Image, repainted: Image.Image) -> dict[str, float]:
+def drift(
+    reference: Image.Image, repainted: Image.Image, ignore: np.ndarray | None = None
+) -> dict[str, float]:
+    """`ignore`: boolean mask of pixels whose repaint is never shown; they are not judged."""
     ref_edges = luminance_edges(reference)
     out_edges = luminance_edges(repainted)
+    if ignore is not None:
+        ref_edges &= ~ignore
+        out_edges &= ~ignore
     grey_reference = np.asarray(reference.convert("L"), np.float32)
     grey_repainted = np.asarray(repainted.convert("L"), np.float32)
     dx, dy = phase_shift(grey_reference, grey_repainted)
-    blocks, unmatched = local_shifts(grey_reference, grey_repainted)
+    blocks, unmatched = local_shifts(grey_reference, grey_repainted, ignore)
     worst = max((max(abs(x), abs(y)) for x, y in blocks), default=0)
     unmatched_fraction = unmatched / max(len(blocks) + unmatched, 1)
     recall = float(
@@ -120,6 +148,7 @@ def drift(reference: Image.Image, repainted: Image.Image) -> dict[str, float]:
         "passes": bool(
             worst <= MAX_LOCAL_SHIFT_PX
             and recall >= MIN_EDGE_RECALL
+            and precision >= MIN_EDGE_PRECISION
             and unmatched_fraction <= MAX_UNMATCHED_FRACTION
         ),
     }

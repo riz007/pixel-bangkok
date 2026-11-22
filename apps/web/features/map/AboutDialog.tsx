@@ -47,6 +47,14 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
 
       <h3>{text.howMadeTitle}</h3>
       <p>{text.howMade}</p>
+      {manifest.ai && (
+        <p>
+          {text.aiNote(
+            manifest.ai.model,
+            Math.max(1, Math.round(manifest.ai.coverage * 100)),
+          )}
+        </p>
+      )}
 
       <h3>{text.shortcutsTitle}</h3>
       <dl className="about__keys">
@@ -80,6 +88,12 @@ export function AboutDialog({ dialogRef, manifest, lang }: AboutDialogProps) {
             <span className="about__licence">({attribution.licence})</span>
           </li>
         ))}
+        {manifest.ai && (
+          <li>
+            {manifest.ai.model}{" "}
+            <span className="about__licence">({manifest.ai.licence})</span>
+          </li>
+        )}
         {retrieved && (
           <li className="about__licence">OpenStreetMap {retrieved}</li>
         )}
