@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useId,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -18,7 +19,8 @@ import { tourOrder } from "@/lib/tour";
 import { AboutDialog } from "./AboutDialog";
 import { ConsentBanner } from "./ConsentBanner";
 import { FeaturedBadge } from "./FeaturedBadge";
-import { toggleFullscreen } from "./fullscreen";
+import { FirstVisitHint, markHintSeen } from "./FirstVisitHint";
+import { toggleFullscreen, useFullscreen } from "./fullscreen";
 import { PixelIcon } from "./icons";
 import { type MapCommands, MapViewer } from "./MapViewer";
 import { PlaceFilters } from "./PlaceFilters";
@@ -61,7 +63,8 @@ export function MapExplorer({
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(
     initialPlaceId,
   );
-  const [railOpen, setRailOpen] = useState(true);
+  const [railOpen, setRailOpen] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [aiOn, setAiOn] = useState(false);
   const [aiHint, setAiHint] = useState(false);
@@ -79,7 +82,11 @@ export function MapExplorer({
   const commandsRef = useRef<MapCommands | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const aboutRef = useRef<HTMLDialogElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const placesId = useId();
 
+  const fullscreen = useFullscreen();
   const { state, retry } = useAreaData(areaId);
   const data = state.status === "ready" ? state.data : null;
   const [filterId, setFilterId] = useState(
@@ -118,6 +125,7 @@ export function MapExplorer({
 
   const select = useCallback(
     (id: string | null) => {
+      if (id) markHintSeen();
       setSelectedPoiId(id);
       updateUrl({ place: id });
     },
@@ -202,6 +210,23 @@ export function MapExplorer({
     }
   };
 
+  /** Runs a menu action and closes the menu, so the map is back in view. */
+  const fromMenu = (action: () => void) => {
+    menuRef.current?.hidePopover();
+    action();
+  };
+
+  const chooseFromList = (id: string) => {
+    select(id);
+    // On a phone the list covers the map: close it so the place can be seen.
+    if (window.matchMedia("(max-width: 760px)").matches) setRailOpen(false);
+  };
+
+  const togglePlaces = useCallback(() => {
+    markHintSeen();
+    setRailOpen((open) => !open);
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
@@ -216,7 +241,8 @@ export function MapExplorer({
       if (key === "/") {
         event.preventDefault();
         searchRef.current?.focus();
-      } else if (key === "p") setRailOpen((open) => !open);
+      } else if (key === "p") togglePlaces();
+      else if (key === "o") setShowOverview((on) => !on);
       else if (key === "a" && hasAi) toggleAi();
       else if (key === "l") setShowLabels((on) => !on);
       else if (key === "t" && animationAvailable) setPlayChoice(!playing);
@@ -228,13 +254,15 @@ export function MapExplorer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasAi, animationAvailable, playing, select, toggleAi]);
+  }, [hasAi, animationAvailable, playing, select, toggleAi, togglePlaces]);
+
+  const thumbnailUrl =
+    data && selectedPoi?.thumbnail
+      ? `${data.baseUrl}/${selectedPoi.thumbnail}?v=${data.manifest.contentVersion}-plain`
+      : null;
 
   return (
-    <div
-      className="app"
-      data-rail={railOpen && tour.length > 0 ? "open" : "closed"}
-    >
+    <div className="app" data-places={railOpen ? "open" : "closed"}>
       <header className="topbar">
         <h1 className="title">
           <button
@@ -281,19 +309,10 @@ export function MapExplorer({
               </select>
             </label>
           )}
-          <button
-            type="button"
-            className="tool"
-            aria-pressed={railOpen}
-            onClick={() => setRailOpen(!railOpen)}
-          >
-            <PixelIcon name="places" />
-            <span>{text.places}</span>
-          </button>
           {hasAi && (
             <button
               type="button"
-              className="tool"
+              className="tool tool--ai"
               aria-pressed={aiOn}
               aria-label={aiOn ? text.aiOnLabel : text.aiOffLabel}
               onClick={toggleAi}
@@ -302,56 +321,132 @@ export function MapExplorer({
               <span aria-hidden="true">{text.aiArt}</span>
             </button>
           )}
-          <button
-            type="button"
-            className="tool"
-            aria-pressed={showLabels}
-            onClick={() => setShowLabels(!showLabels)}
-          >
-            <PixelIcon name="labels" />
-            <span>{text.labels}</span>
-          </button>
-          {animationAvailable && (
+          {tour.length > 0 && (
             <button
               type="button"
               className="tool"
-              aria-pressed={playing}
-              aria-label={playing ? text.trafficOnLabel : text.trafficOffLabel}
-              onClick={() => setPlayChoice(!playing)}
+              aria-pressed={railOpen}
+              aria-controls={placesId}
+              onClick={togglePlaces}
             >
-              <PixelIcon name={playing ? "pause" : "play"} />
-              <span aria-hidden="true">{text.traffic}</span>
+              <PixelIcon name="places" />
+              <span>{text.places}</span>
             </button>
           )}
-          <button type="button" className="tool" onClick={share}>
-            <PixelIcon name="share" />
-            <span>{text.share}</span>
-          </button>
           <button
             type="button"
             className="tool"
-            aria-label={text.reportLabel}
-            onClick={report}
+            aria-label={text.moreLabel}
+            popoverTarget={menuId}
           >
-            <PixelIcon name="report" />
-            <span aria-hidden="true">{text.report}</span>
+            <PixelIcon name="more" />
+            <span aria-hidden="true">{text.more}</span>
           </button>
-          <button
-            type="button"
-            className="tool"
-            onClick={() => aboutRef.current?.showModal()}
-          >
-            <PixelIcon name="about" />
-            <span>{text.about}</span>
-          </button>
-          <button
-            type="button"
-            className="tool tool--lang"
-            aria-label={text.languageLabel}
-            onClick={() => setLang(lang === "th" ? "en" : "th")}
-          >
-            <span lang={lang === "th" ? "en" : "th"}>{text.language}</span>
-          </button>
+          <div ref={menuRef} id={menuId} className="menu" popover="auto">
+            <ul className="menu__group">
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  role="switch"
+                  aria-checked={showLabels}
+                  onClick={() => setShowLabels(!showLabels)}
+                >
+                  <PixelIcon name="labels" />
+                  {text.labels}
+                </button>
+              </li>
+              {animationAvailable && (
+                <li>
+                  <button
+                    type="button"
+                    className="menu__item"
+                    role="switch"
+                    aria-checked={playing}
+                    aria-label={
+                      playing ? text.trafficOnLabel : text.trafficOffLabel
+                    }
+                    onClick={() => setPlayChoice(!playing)}
+                  >
+                    <PixelIcon name={playing ? "pause" : "play"} />
+                    <span aria-hidden="true">{text.traffic}</span>
+                  </button>
+                </li>
+              )}
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  role="switch"
+                  aria-checked={showOverview}
+                  onClick={() => setShowOverview(!showOverview)}
+                >
+                  <PixelIcon name="places" />
+                  {text.overview}
+                </button>
+              </li>
+            </ul>
+            <ul className="menu__group">
+              {fullscreen.available && (
+                <li>
+                  <button
+                    type="button"
+                    className="menu__item"
+                    onClick={() => fromMenu(toggleFullscreen)}
+                  >
+                    <PixelIcon name={fullscreen.active ? "shrink" : "expand"} />
+                    {fullscreen.active ? text.exitFullscreen : text.fullscreen}
+                  </button>
+                </li>
+              )}
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  onClick={() => fromMenu(share)}
+                >
+                  <PixelIcon name="share" />
+                  {text.share}
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  aria-label={text.reportLabel}
+                  onClick={() => fromMenu(report)}
+                >
+                  <PixelIcon name="report" />
+                  <span aria-hidden="true">{text.report}</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  onClick={() => fromMenu(() => aboutRef.current?.showModal())}
+                >
+                  <PixelIcon name="about" />
+                  {text.about}
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  aria-label={text.languageLabel}
+                  onClick={() => setLang(lang === "th" ? "en" : "th")}
+                >
+                  <span className="menu__glyph" aria-hidden="true">
+                    ก
+                  </span>
+                  <span lang={lang === "th" ? "en" : "th"}>
+                    {text.language}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </div>
         </nav>
       </header>
 
@@ -384,36 +479,38 @@ export function MapExplorer({
               aiOn={aiOn}
               playing={playing}
               showLabels={showLabels}
+              showOverview={showOverview}
               lang={lang}
               tourNumbers={tourNumbers}
               commandsRef={commandsRef}
               onAnimationAvailable={setAnimationAvailable}
               pin={pin}
             />
+            {railOpen && tour.length > 0 && (
+              <PlacesRail
+                id={placesId}
+                places={tour}
+                lang={lang}
+                selectedId={selectedPoiId}
+                onSelect={chooseFromList}
+                onClose={() => setRailOpen(false)}
+                filters={
+                  <PlaceFilters
+                    places={data.pois}
+                    active={filter}
+                    lang={lang}
+                    onChange={changeFilter}
+                  />
+                }
+              />
+            )}
             {selectedPoi && (
               <PlacePanel
                 poi={selectedPoi}
                 number={tourNumbers.get(selectedPoi.id)}
                 lang={lang}
+                thumbnailUrl={thumbnailUrl}
                 onClose={() => select(null)}
-              />
-            )}
-            {railOpen && (
-              <PlaceFilters
-                places={data.pois}
-                active={filter}
-                lang={lang}
-                onChange={changeFilter}
-              />
-            )}
-            {railOpen && (
-              <PlacesRail
-                places={tour}
-                baseUrl={data.baseUrl}
-                version={`${data.manifest.contentVersion}-plain`}
-                lang={lang}
-                selectedId={selectedPoiId}
-                onSelect={select}
               />
             )}
             <p className="credit" data-open={creditsOpen}>
@@ -445,9 +542,12 @@ export function MapExplorer({
               manifest={data.manifest}
               lang={lang}
             />
+            {!selectedPoi && !railOpen && (
+              <FirstVisitHint lang={lang} onBrowse={() => setRailOpen(true)} />
+            )}
           </>
         )}
-        {data && !selectedPoi && <FeaturedBadge lang={lang} />}
+        {data && !selectedPoi && !railOpen && <FeaturedBadge lang={lang} />}
         <ConsentBanner lang={lang} onPrivacy={openPrivacy} />
         {aiHint && data?.manifest.ai && (
           <div className="ai-hint" role="status">
@@ -467,7 +567,7 @@ export function MapExplorer({
             )}
             <button
               type="button"
-              className="ai-hint__close"
+              className="icon-button"
               aria-label={text.dismiss}
               onClick={() => setAiHint(false)}
             >

@@ -12,6 +12,22 @@ const TEMPLE_COLOURS = [
   "42,36,48",
 ];
 
+// The first-visit hint has its own test; elsewhere it would sit over pins the tests click.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("keep-hint"))
+      localStorage.setItem("pixel-bangkok:hint-seen", "1");
+  });
+});
+
+async function openMenu(page: Page) {
+  await page.getByRole("button", { name: "More map options" }).click();
+}
+
+async function openPlaces(page: Page) {
+  await page.getByRole("button", { name: "Places", exact: true }).click();
+}
+
 async function openMap(page: Page) {
   await page.goto("/?area=wat-arun");
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
@@ -163,6 +179,7 @@ test("attribution is visible and credits open in the About dialog", async ({
   await expect(
     page.getByRole("link", { name: "© OpenStreetMap contributors" }),
   ).toBeVisible();
+  await openMenu(page);
   await page.getByRole("button", { name: "About", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "About this map" });
   await expect(dialog).toBeVisible();
@@ -265,8 +282,10 @@ test("traffic and boats draw when zoomed in and the toggle controls motion", asy
   );
   await page.goto("/?area=old-town");
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
-  const toggle = page.getByRole("button", { name: /traffic and boats/ });
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  const toggle = page.getByRole("switch", { name: /traffic and boats/ });
+  await openMenu(page);
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await page.keyboard.press("Escape");
   await page.getByRole("searchbox").fill("Memorial Bridge");
   await page.locator(".search__results button").first().click();
   await page
@@ -284,13 +303,14 @@ test("traffic and boats draw when zoomed in and the toggle controls motion", asy
   await page.waitForTimeout(400);
   expect((await animationSignature(page)).hash).toBe(still.hash);
 
+  await openMenu(page);
   await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
   await expect
     .poll(async () => (await animationSignature(page)).hash)
     .not.toBe(still.hash);
   await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
 });
 
 test("animation layer stays empty when zoomed far out", async ({ page }) => {
@@ -301,8 +321,9 @@ test("animation layer stays empty when zoomed far out", async ({ page }) => {
   );
   await page.goto("/?area=old-town");
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  await openMenu(page);
   await expect(
-    page.getByRole("button", { name: /traffic and boats/ }),
+    page.getByRole("switch", { name: /traffic and boats/ }),
   ).toBeVisible();
   await page.waitForTimeout(300);
   expect((await animationSignature(page)).painted).toBe(0);
@@ -312,9 +333,7 @@ test("about shows the full ceremonial name of Bangkok", async ({ page }) => {
   await openMap(page);
   await page.getByRole("button", { name: /Pixel Bangkok, Bangkok/ }).click();
   const dialog = page.getByRole("dialog", { name: "About this map" });
-  await expect(
-    dialog.getByText(/^กรุงเทพมหานคร อมรรัตนโกสินทร์/),
-  ).toBeVisible();
+  await expect(dialog.getByText(/^กรุงเทพมหานคร อมรรัตนโกสินทร์/)).toBeVisible();
   await expect(
     dialog.getByText(/^Krung Thep Mahanakhon Amon Rattanakosin/),
   ).toBeVisible();
@@ -328,6 +347,7 @@ test("language switch changes the interface and is remembered", async ({
     "placeholder",
     "A place, or lat, long",
   );
+  await openMenu(page);
   await page.getByRole("button", { name: "Switch to Thai" }).click();
   await expect(page.getByRole("searchbox")).toHaveAttribute(
     "placeholder",
@@ -339,6 +359,7 @@ test("language switch changes the interface and is remembered", async ({
     "placeholder",
     "สถานที่ หรือ ละติจูด, ลองจิจูด",
   );
+  await page.getByRole("button", { name: "ตัวเลือกแผนที่เพิ่มเติม" }).click();
   await page.getByRole("button", { name: "Switch to English" }).click();
   await expect(page.getByRole("searchbox")).toHaveAttribute(
     "placeholder",
@@ -348,17 +369,27 @@ test("language switch changes the interface and is remembered", async ({
 
 test("places rail selects places in walking order and deep links work", async ({
   page,
+  isMobile,
 }) => {
   await openMap(page);
+  await openPlaces(page);
   const rail = page.getByRole("region", { name: /Places to visit/ });
   const first = rail.locator(".plate").first();
   await first.click();
+  if (isMobile) {
+    await expect(rail).toBeHidden();
+    await openPlaces(page);
+  }
   await expect(first).toHaveAttribute("aria-current", "true");
   await expect(page).toHaveURL(/place=/);
   const placeId = new URL(page.url()).searchParams.get("place");
   const next = rail.getByRole("button", { name: "Next place" });
   if (await next.isVisible()) await next.click();
   else await rail.locator(".plate").nth(1).click();
+  if (isMobile) {
+    await expect(rail).toBeHidden();
+    await openPlaces(page);
+  }
   await expect(rail.locator(".plate").nth(1)).toHaveAttribute(
     "aria-current",
     "true",
@@ -378,7 +409,6 @@ test("slash focuses search and P toggles the places rail", async ({ page }) => {
   await page.keyboard.press("/");
   await expect(page.getByRole("searchbox")).toBeFocused();
   await page.getByRole("searchbox").blur();
-  await page.keyboard.press("p");
   await expect(
     page.getByRole("region", { name: /Places to visit/ }),
   ).toBeHidden();
@@ -386,6 +416,10 @@ test("slash focuses search and P toggles the places rail", async ({ page }) => {
   await expect(
     page.getByRole("region", { name: /Places to visit/ }),
   ).toBeVisible();
+  await page.keyboard.press("p");
+  await expect(
+    page.getByRole("region", { name: /Places to visit/ }),
+  ).toBeHidden();
 });
 
 test("lat, long search drops a pin on the matching map point", async ({
@@ -424,6 +458,7 @@ test("report opens an OpenStreetMap note at the current view", async ({
       return null;
     };
   });
+  await openMenu(page);
   await page.getByRole("button", { name: /Report a map error/ }).click();
   const opened = await page.evaluate(
     () => (window as unknown as { opened: string[] }).opened,
@@ -438,6 +473,7 @@ test("place filters narrow the pins and the places strip and are shareable", asy
   page,
 }) => {
   await openMap(page);
+  await openPlaces(page);
   const filters = page.getByRole("group", { name: "Show places by type" });
   const all = await page.locator(".marker").count();
   const worship = filters.getByRole("button", { name: /Places of worship/ });
@@ -452,14 +488,16 @@ test("place filters narrow the pins and the places strip and are shareable", asy
   await expect(page).not.toHaveURL(/filter=/);
 });
 
-test("hiding places also hides the filters, and phone credits collapse to OpenStreetMap", async ({
+test("places and their filters start hidden, and phone credits collapse to OpenStreetMap", async ({
   page,
   isMobile,
 }) => {
   await openMap(page);
   const filters = page.getByRole("group", { name: "Show places by type" });
+  await expect(filters).toHaveCount(0);
+  await openPlaces(page);
   await expect(filters).toBeVisible();
-  await page.getByRole("button", { name: "Places", exact: true }).click();
+  await page.getByRole("button", { name: "Close the places list" }).click();
   await expect(filters).toHaveCount(0);
   const credit = page.locator(".credit");
   await expect(
@@ -475,6 +513,7 @@ test("hiding places also hides the filters, and phone credits collapse to OpenSt
 
 test("About shows the Isometric Cities badge", async ({ page }) => {
   await openMap(page);
+  await openMenu(page);
   await page.getByRole("button", { name: "About", exact: true }).click();
   const badge = page.locator(".about__badge").getByRole("link", {
     name: "Featured on Isometric Cities",
@@ -490,7 +529,9 @@ test("AI art is off by default and switches the map to AI tiles", async ({
   ).json();
   test.skip(!manifest.ai, "no AI layer published for old-town");
   const requests: string[] = [];
-  page.on("request", (request) => requests.push(new URL(request.url()).pathname));
+  page.on("request", (request) =>
+    requests.push(new URL(request.url()).pathname),
+  );
   await page.goto("/?area=old-town");
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
   const toggle = page.getByRole("button", { name: "Show AI art" });
@@ -523,4 +564,42 @@ test("the Isometric Cities badge shows on the map and stays hidden once dismisse
   await page.reload();
   await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
   await expect(badge).toHaveCount(0);
+});
+
+test("a first visit shows one hint that opens the places list and stays dismissed", async ({
+  page,
+}) => {
+  await page.addInitScript(() => sessionStorage.setItem("keep-hint", "1"));
+  await page.goto("/?area=wat-arun");
+  await page.evaluate(() => localStorage.removeItem("pixel-bangkok:hint-seen"));
+  await page.reload();
+  await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  const hint = page.locator(".hint");
+  await expect(hint).toContainText("Drag to explore");
+  await hint.getByRole("button", { name: "Browse places" }).click();
+  await expect(
+    page.getByRole("region", { name: /Places to visit/ }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  await expect(page.locator(".hint")).toHaveCount(0);
+});
+
+test("the More menu holds the secondary controls and closes after an action", async ({
+  page,
+}) => {
+  await openMap(page);
+  const about = page.getByRole("button", { name: "About", exact: true });
+  await expect(about).toBeHidden();
+  await openMenu(page);
+  await expect(about).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Labels" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(about).toBeHidden();
+  await openMenu(page);
+  await about.click();
+  await expect(
+    page.getByRole("dialog", { name: "About this map" }),
+  ).toBeVisible();
+  await expect(about).toBeHidden();
 });

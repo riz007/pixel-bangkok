@@ -21,8 +21,6 @@ import type { PointOfInterest, TileManifest } from "@/lib/manifest";
 import { parseMotion } from "@/lib/motion";
 import { visibleMarkerIds } from "@/lib/visibility";
 
-import { toggleFullscreen, useFullscreen } from "./fullscreen";
-import { PixelIcon } from "./icons";
 import { categoryInfo } from "./poiCategories";
 import { TrafficLayer } from "./traffic";
 
@@ -50,6 +48,7 @@ interface MapViewerProps {
   aiOn: boolean;
   playing: boolean;
   showLabels: boolean;
+  showOverview: boolean;
   lang: Lang;
   tourNumbers: Map<string, number>;
   /** When set, only these places get pins (category filter); null shows all. */
@@ -82,6 +81,12 @@ function isRealFailure(event: {
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** How far past native resolution the map can zoom. The AI art holds up to about 3x before
+ * its painted detail turns to blur; the drawing's pixel grid can be magnified much further. */
+function maxZoomRatio(aiOn: boolean): number {
+  return aiOn ? 3 : 8;
 }
 
 function layerVersion(manifest: TileManifest, aiOn: boolean): string {
@@ -123,6 +128,7 @@ export function MapViewer({
   aiOn,
   playing,
   showLabels,
+  showOverview,
   lang,
   tourNumbers,
   visibleIds = null,
@@ -131,7 +137,6 @@ export function MapViewer({
   pin,
 }: MapViewerProps) {
   const text = STRINGS[lang];
-  const fullscreen = useFullscreen();
   const pinRef = useRef<HTMLDivElement>(null);
   const pinPointRef = useRef(pin);
   const positionRef = useRef<(() => void) | null>(null);
@@ -141,6 +146,7 @@ export function MapViewer({
   const animationRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const trafficRef = useRef<TrafficLayer | null>(null);
+  const scalingRef = useRef<(() => void) | null>(null);
   const overlayViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const frontViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const upperRef = useRef<HTMLCanvasElement>(null);
@@ -192,7 +198,7 @@ export function MapViewer({
           navigatorId,
           navigatorSizeRatio: 0.16,
           minZoomImageRatio: 0.7,
-          maxZoomPixelRatio: 8,
+          maxZoomPixelRatio: maxZoomRatio(aiOnRef.current),
           minPixelRatio: 1,
           smoothTileEdgesMinZoom: Infinity,
           maxImageCacheCount: 1500,
@@ -294,7 +300,9 @@ export function MapViewer({
           const imageZoom = current.viewport.viewportToImageZoom(
             current.viewport.getZoom(true),
           );
-          const wanted = imageZoom < 1;
+          // The drawing is a pixel grid and stays crisp when magnified; the AI art is painterly,
+          // and nearest-neighbour magnification turns its fine texture into jagged, shimmering steps.
+          const wanted = imageZoom < 1 || aiOnRef.current;
           if (wanted === smoothing) return;
           smoothing = wanted;
           for (const target of [current, ...followers]) {
@@ -302,6 +310,13 @@ export function MapViewer({
           }
         };
         current.addHandler("update-viewport", updateSmoothing);
+        scalingRef.current = () => {
+          (
+            current.viewport as unknown as { maxZoomPixelRatio: number }
+          ).maxZoomPixelRatio = maxZoomRatio(aiOnRef.current);
+          current.viewport.applyConstraints();
+          updateSmoothing();
+        };
         current.addHandler("resize", positionMarkers);
         const navigatorElement = document.getElementById(navigatorId);
         if (navigatorElement && typeof ResizeObserver !== "undefined") {
@@ -409,6 +424,7 @@ export function MapViewer({
     return () => {
       cancelled = true;
       viewerRef.current = null;
+      scalingRef.current = null;
       commandsRef.current = null;
       focusRef.current = null;
       trafficRef.current?.destroy();
@@ -447,6 +463,7 @@ export function MapViewer({
     swap(viewerRef.current, baseTemplate(manifest, aiOn));
     swap(overlayViewerRef.current, overlayTemplate(manifest, aiOn));
     swap(frontViewerRef.current, frontTemplate(manifest, aiOn));
+    scalingRef.current?.();
   }, [aiOn, manifest, baseUrl]);
 
   useEffect(() => {
@@ -469,6 +486,7 @@ export function MapViewer({
       className="map"
       data-status={status}
       data-labels={showLabels ? "on" : "off"}
+      data-overview={showOverview ? "on" : "off"}
     >
       <div
         ref={containerRef}
@@ -572,18 +590,6 @@ export function MapViewer({
         >
           <span aria-hidden="true">⌂</span>
         </button>
-        {fullscreen.available && (
-          <button
-            type="button"
-            aria-label={
-              fullscreen.active ? text.exitFullscreen : text.fullscreen
-            }
-            aria-pressed={fullscreen.active}
-            onClick={toggleFullscreen}
-          >
-            <PixelIcon name={fullscreen.active ? "shrink" : "expand"} />
-          </button>
-        )}
       </div>
 
       {status === "loading" && (
