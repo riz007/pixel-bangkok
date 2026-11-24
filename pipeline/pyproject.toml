@@ -8,6 +8,7 @@ dependencies = [
   "numpy>=2.5.4",
   "osmium>=4.3.2",
   "pillow>=11",
+  "pyarrow>=22",
   "pyproj>=3.7",
   "rasterio>=1.5.2",
   "shapely>=2.0",

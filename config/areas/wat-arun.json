@@ -41,5 +41,13 @@
       "attribution": "Tree canopy: Meta and World Resources Institute",
       "url": "https://registry.opendata.aws/dataforgood-fb-forests/"
     }
+  },
+  "building_fill": {
+    "dataset": "Overture Maps buildings (Google Open Buildings and Microsoft outlines)",
+    "release": "2026-11-18.0",
+    "path": "data/raw/overture/buildings-2026-11-18.0.parquet",
+    "licence": "ODbL 1.0",
+    "attribution": "Extra buildings: Overture Maps Foundation, from Google Open Buildings and Microsoft",
+    "url": "https://docs.overturemaps.org/attribution/"
   }
 }

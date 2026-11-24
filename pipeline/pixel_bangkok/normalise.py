@@ -24,6 +24,7 @@ from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, P
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import polygonize, unary_union
 
+from . import building_fill
 from .config import AreaConfig, RenderConfig
 from .crs import MapBounds
 from .geojson_io import feature, write_feature_collection
@@ -498,6 +499,8 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
     extract_metadata = extract_metadata.get("osm", extract_metadata)
     layers, stats = normalise(raw, area, render)
     bounds = MapBounds.from_area(area)
+    fill_stats = building_fill.run(layers, area, bounds)
+    stats = dict(sorted({**stats, **fill_stats}.items()))
     provenance = {
         "area_id": area.id,
         "provider": area.source.provider,
@@ -516,6 +519,17 @@ def run(area: AreaConfig, render: RenderConfig, raw_dir: Path, processed_dir: Pa
             "reprojected to WGS84 for storage",
         ],
     }
+    if fill_stats and area.building_fill is not None:
+        provenance["building_fill"] = {
+            "dataset": area.building_fill.dataset,
+            "release": area.building_fill.release,
+            "licence": area.building_fill.licence,
+            "url": area.building_fill.url,
+            "rule": "only buildings not from OpenStreetMap, at least 12 m2, sharing at most 20% "
+            "of their footprint with an OSM building and at most 50% with water, not across "
+            "the centre line of an at-grade road, and none inside temple, palace or military "
+            "grounds",
+        }
     for layer, features in layers.items():
         write_feature_collection(processed_dir / f"{layer}.geojson", features, provenance)
     metadata_path = processed_dir / "metadata.json"

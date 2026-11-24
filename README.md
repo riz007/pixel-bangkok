@@ -26,6 +26,9 @@ Everything on the map is drawn by a program from open data, not by hand, so ever
 canal and tree is where it really is:
 
 - **OpenStreetMap** for buildings, roads, water, railways, stations and landmarks
+- **Overture Maps** for the many buildings OpenStreetMap has not mapped yet: outlines traced
+  from imagery by Google and Microsoft, added only where they don't overlap a mapped building,
+  a road or water, and never inside temple, palace or military grounds
 - **Google Open Buildings** for building heights, with Wikidata and published figures for the tallest
   towers (the satellite heights stop near 100 m)
 - **Meta and WRI canopy maps** for trees
@@ -76,6 +79,8 @@ The code is under the [MIT licence](LICENSE). The map data keeps its own licence
 credits on every map:
 
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL 1.0
+- Extra buildings: [Overture Maps Foundation](https://docs.overturemaps.org/attribution/), from
+  Google Open Buildings and Microsoft, ODbL 1.0
 - Building heights: Google Open Buildings 2.5D Temporal, CC BY 4.0
 - Tree canopy: Meta and World Resources Institute, CC BY 4.0
 - Descriptions and some tower heights: Wikidata, CC0

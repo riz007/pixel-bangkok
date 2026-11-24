@@ -256,6 +256,16 @@ def attributions(area: AreaConfig, raster_sources_used: tuple[str, ...]) -> list
     ]
     configured = {"building_heights": area.building_heights, "tree_canopy": area.tree_canopy}
     for key in raster_sources_used:
+        if key == "building_fill" and area.building_fill is not None:
+            entries.append(
+                {
+                    "text": area.building_fill.attribution,
+                    "url": area.building_fill.url,
+                    "licence": area.building_fill.licence,
+                    "provider": "Overture Maps Foundation",
+                }
+            )
+            continue
         if key == "wikidata":
             entries.append(
                 {
@@ -469,7 +479,8 @@ def run(
         tuple(
             key for key in ("building_heights", "tree_canopy") if (raw_dir / f"{key}.tif").exists()
         )
-        + (("wikidata",) if (processed_dir / "pois.json").exists() else ()),
+        + (("wikidata",) if (processed_dir / "pois.json").exists() else ())
+        + (("building_fill",) if source_metadata.get("stats", {}).get("fill_added") else ()),
     )
     manifest["tiles"]["present"] = {
         published: read_present(build_dir / built)

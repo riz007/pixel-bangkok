@@ -36,6 +36,18 @@ class RasterSourceConfig:
 
 
 @dataclass(frozen=True)
+class BuildingFillConfig:
+    """Building outlines that fill gaps in OpenStreetMap, read from a local GeoParquet file."""
+
+    dataset: str
+    release: str
+    path: str
+    licence: str
+    attribution: str
+    url: str
+
+
+@dataclass(frozen=True)
 class AreaConfig:
     id: str
     name_en: str
@@ -48,6 +60,7 @@ class AreaConfig:
     source: SourceConfig
     building_heights: RasterSourceConfig | None = None
     tree_canopy: RasterSourceConfig | None = None
+    building_fill: BuildingFillConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -221,6 +234,21 @@ def _raster_source(data: dict[str, Any], key: str) -> RasterSourceConfig | None:
     )
 
 
+def _building_fill(data: dict[str, Any]) -> BuildingFillConfig | None:
+    section = data.get("building_fill")
+    if section is None:
+        return None
+    context = "building_fill"
+    return BuildingFillConfig(
+        dataset=str(_require(section, "dataset", context)),
+        release=str(_require(section, "release", context)),
+        path=str(_require(section, "path", context)),
+        licence=str(_require(section, "licence", context)),
+        attribution=str(_require(section, "attribution", context)),
+        url=str(_require(section, "url", context)),
+    )
+
+
 def _source_method(source: dict[str, Any]) -> str:
     method = source.get("method", "overpass")
     if method not in {"overpass", "pbf"}:
@@ -266,6 +294,7 @@ def parse_area_config(data: dict[str, Any]) -> AreaConfig:
         ),
         building_heights=_raster_source(data, "building_heights"),
         tree_canopy=_raster_source(data, "tree_canopy"),
+        building_fill=_building_fill(data),
     )
 
 
