@@ -83,6 +83,9 @@ credits on every map:
   Google Open Buildings and Microsoft, ODbL 1.0
 - Building heights: Google Open Buildings 2.5D Temporal, CC BY 4.0
 - Tree canopy: Meta and World Resources Institute, CC BY 4.0
+- Live weather and air quality: [Open-Meteo.com](https://open-meteo.com/), CC BY 4.0, with air
+  quality from the Copernicus Atmosphere Monitoring Service (CAMS). These are modelled values for
+  central Bangkok, fetched by the site's server and cached for ten minutes
 - Descriptions and some tower heights: Wikidata, CC0
 - AI art (beta): FLUX.2 klein 4B by Black Forest Labs and the Isometric Mumbai LoRA by flash1405, both
   Apache 2.0

@@ -14,6 +14,10 @@ const TEMPLE_COLOURS = [
 
 // The first-visit hint has its own test; elsewhere it would sit over pins the tests click.
 test.beforeEach(async ({ page }) => {
+  // Tests never reach the real weather service; the weather tests answer it themselves.
+  await page.route("**/api/weather", (route) =>
+    route.fulfill({ status: 503, json: { error: "weather unavailable" } }),
+  );
   await page.addInitScript(() => {
     if (!sessionStorage.getItem("keep-hint"))
       localStorage.setItem("pixel-bangkok:hint-seen", "1");
@@ -602,4 +606,81 @@ test("the More menu holds the secondary controls and closes after an action", as
     page.getByRole("dialog", { name: "About this map" }),
   ).toBeVisible();
   await expect(about).toBeHidden();
+});
+
+test("day and night follow Bangkok time, and a chosen light mode is remembered", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-11-27T22:00:00+07:00") });
+  await openMap(page);
+  const sky = page.locator(".map__sky");
+  await expect(sky).toHaveAttribute("data-phase", "night");
+  await openMenu(page);
+  const lights = page.getByRole("group", { name: /Bangkok time now 22:00/ });
+  await expect(
+    lights.getByRole("button", { name: "Follow Bangkok time" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await lights.getByRole("button", { name: "Day", exact: true }).click();
+  await expect(sky).toHaveAttribute("data-phase", "day");
+  await page.reload();
+  await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  await expect(page.locator(".map__sky")).toHaveAttribute("data-phase", "day");
+});
+
+test("at midday in Bangkok the map is in daylight", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-11-27T12:00:00+07:00") });
+  await openMap(page);
+  await expect(page.locator(".map__sky")).toHaveAttribute("data-phase", "day");
+  await page.keyboard.press("n");
+  await expect(page.locator(".map__sky")).toHaveAttribute("data-phase", "day");
+  await page.keyboard.press("n");
+  await expect(page.locator(".map__sky")).toHaveAttribute(
+    "data-phase",
+    "night",
+  );
+});
+
+const RAIN = {
+  observedAt: "2026-11-27T19:15",
+  temperatureC: 29.6,
+  condition: "rain",
+  precipitationMm: 2.4,
+  cloudCover: 100,
+  windKmh: 12,
+  pm25: 52.4,
+  aqi: 142,
+  aqiBand: "sensitive",
+};
+
+test("live weather rains on the map and shows the reading, and W turns it off", async ({
+  page,
+}) => {
+  await page.route("**/api/weather", (route) => route.fulfill({ json: RAIN }));
+  await openMap(page);
+  const layer = page.locator(".map__weather");
+  await expect(layer).toHaveAttribute("data-condition", "rain");
+  await expect(layer.locator(".map__rain")).toHaveCount(1);
+  const reading = page.locator(".weather");
+  await expect(reading).toContainText("30°");
+  await expect(reading).toContainText("Rain");
+  await expect(reading).toContainText("PM2.5 52");
+  await expect(reading).toHaveAttribute(
+    "aria-label",
+    /US AQI 142, unhealthy for sensitive groups/,
+  );
+  await expect(
+    page.locator(".credit a", { hasText: "Open-Meteo" }),
+  ).toBeAttached();
+  await page.keyboard.press("w");
+  await expect(layer).toHaveCount(0);
+  await expect(reading).toHaveCount(0);
+});
+
+test("the map works the same when the weather service is down", async ({
+  page,
+}) => {
+  await openMap(page);
+  await expect(page.locator(".map__weather")).toHaveCount(0);
+  await expect(page.locator(".weather")).toHaveCount(0);
+  await expect(page.locator(".marker").first()).toBeVisible();
 });

@@ -22,6 +22,36 @@ const en = {
   more: "More",
   moreLabel: "More map options",
   overview: "Overview map",
+  light: "Light",
+  lightLabel: (clock: string) => `Day and night, Bangkok time now ${clock}`,
+  lightAuto: "Auto",
+  lightAutoLabel: "Follow Bangkok time",
+  lightDay: "Day",
+  lightNight: "Night",
+  liveWeather: "Live weather",
+  conditions: {
+    clear: "Clear",
+    partly: "Partly cloudy",
+    cloudy: "Cloudy",
+    fog: "Fog",
+    drizzle: "Drizzle",
+    rain: "Rain",
+    storm: "Thunderstorm",
+  },
+  aqiBands: {
+    good: "good",
+    moderate: "moderate",
+    sensitive: "unhealthy for sensitive groups",
+    unhealthy: "unhealthy",
+    "very-unhealthy": "very unhealthy",
+    hazardous: "hazardous",
+  },
+  weatherLabel: (temperature: string, condition: string, air: string | null) =>
+    `Bangkok now: ${temperature} °C, ${condition.toLowerCase()}.` +
+    (air ? ` ${air}.` : "") +
+    " Modelled data from Open-Meteo, updated every 10 minutes.",
+  airLabel: (pm25: string, aqi: string, band: string) =>
+    `PM2.5 ${pm25} µg/m³, US AQI ${aqi}, ${band}`,
   placesCount: (n: number) => `${n} to visit`,
   closePlaces: "Close the places list",
   hint: "Drag to explore, and tap a pin to read about it.",
@@ -79,6 +109,9 @@ const en = {
     ["A", "AI art on or off"],
     ["L", "Labels on or off"],
     ["T", "Traffic and boats on or off"],
+    ["N", "Day, night or Bangkok time"],
+    ["O", "Overview map on or off"],
+    ["W", "Live weather on or off"],
     ["F", "Full screen"],
     ["+ / −", "Zoom"],
     ["Esc", "Close"],
@@ -160,6 +193,36 @@ const th: Strings = {
   more: "เพิ่มเติม",
   moreLabel: "ตัวเลือกแผนที่เพิ่มเติม",
   overview: "แผนที่ย่อ",
+  light: "กลางวัน กลางคืน",
+  lightLabel: (clock: string) => `กลางวันและกลางคืน ตอนนี้เวลากรุงเทพฯ ${clock} น.`,
+  lightAuto: "อัตโนมัติ",
+  lightAutoLabel: "ตามเวลากรุงเทพฯ",
+  lightDay: "กลางวัน",
+  lightNight: "กลางคืน",
+  liveWeather: "สภาพอากาศสด",
+  conditions: {
+    clear: "ท้องฟ้าแจ่มใส",
+    partly: "มีเมฆบางส่วน",
+    cloudy: "มีเมฆมาก",
+    fog: "หมอก",
+    drizzle: "ฝนปรอย",
+    rain: "ฝนตก",
+    storm: "พายุฝนฟ้าคะนอง",
+  },
+  aqiBands: {
+    good: "ดี",
+    moderate: "ปานกลาง",
+    sensitive: "มีผลต่อกลุ่มเสี่ยง",
+    unhealthy: "มีผลต่อสุขภาพ",
+    "very-unhealthy": "มีผลต่อสุขภาพมาก",
+    hazardous: "อันตราย",
+  },
+  weatherLabel: (temperature: string, condition: string, air: string | null) =>
+    `กรุงเทพฯ ตอนนี้ ${temperature} องศาเซลเซียส ${condition}` +
+    (air ? ` ${air}` : "") +
+    " ข้อมูลจากแบบจำลองของ Open-Meteo อัปเดตทุก 10 นาที",
+  airLabel: (pm25: string, aqi: string, band: string) =>
+    `PM2.5 ${pm25} ไมโครกรัมต่อลูกบาศก์เมตร ดัชนี US AQI ${aqi} ${band}`,
   placesCount: (n: number) => `แนะนำ ${n} แห่ง`,
   closePlaces: "ปิดรายการสถานที่",
   hint: "ลากเพื่อสำรวจ แตะหมุดเพื่ออ่านเรื่องราว",
@@ -189,8 +252,7 @@ const th: Strings = {
   loadingMap: "กำลังโหลดแผนที่",
   loadingTiles: "กำลังวาดเมือง",
   mapUnavailable: "โหลดแผนที่ไม่สำเร็จ",
-  mapUnavailableHint:
-    "ไม่พบไฟล์แผนที่หรือเชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง",
+  mapUnavailableHint: "ไม่พบไฟล์แผนที่หรือเชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง",
   tryAgain: "ลองอีกครั้ง",
   tilesFailed: "บางส่วนของแผนที่โหลดไม่สำเร็จ อาจดูไม่คมชัด",
   dismiss: "ปิด",
@@ -200,8 +262,7 @@ const th: Strings = {
   aboutIntro:
     "กรุงเทพฯ ทั้งเมืองในภาพพิกเซลอาร์ตที่ซูมเที่ยวได้ทุกตรอกซอกซอย ทั้งวัด คลอง ตลาด และแม่น้ำเจ้าพระยา วาดจากข้อมูลเปิด",
   fullNameLabel: "ชื่อเต็มของกรุงเทพมหานคร",
-  fullNameMeaning:
-    "ชื่อเมืองที่ยาวที่สุดในโลก ได้รับการบันทึกโดยกินเนสส์เวิลด์เรคคอร์ด",
+  fullNameMeaning: "ชื่อเมืองที่ยาวที่สุดในโลก ได้รับการบันทึกโดยกินเนสส์เวิลด์เรคคอร์ด",
   howMadeTitle: "แผนที่นี้ทำอย่างไร",
   howMade:
     "อาคาร ถนน คลอง และต้นไม้ทุกแห่งมาจาก OpenStreetMap ความสูงอาคารจาก Google Open Buildings และต้นไม้จากแผนที่ความสูงเรือนยอด โปรแกรมวาดทั้งหมดเป็นแผนที่ไอโซเมตริก ทุกสถานที่จึงอยู่ตรงตำแหน่งจริง",
@@ -217,6 +278,9 @@ const th: Strings = {
     ["A", "เปิดหรือปิดภาพ AI"],
     ["L", "เปิดหรือปิดป้ายชื่อ"],
     ["T", "เปิดหรือปิดรถและเรือ"],
+    ["N", "กลางวัน กลางคืน หรือตามเวลากรุงเทพฯ"],
+    ["O", "เปิดหรือปิดแผนที่ย่อ"],
+    ["W", "เปิดหรือปิดสภาพอากาศสด"],
     ["F", "เต็มจอ"],
     ["+ / −", "ซูม"],
     ["Esc", "ปิด"],

@@ -11,8 +11,10 @@ import {
 } from "react";
 
 import { imageToLonLat, lonLatToImage, type Point } from "@/lib/coords";
+import { bangkokClock, LIGHT_MODES } from "@/lib/daylight";
 import { filterPlaces, findFilter } from "@/lib/filters";
 import { STRINGS } from "@/lib/i18n";
+import { WEATHER_CREDIT } from "@/lib/weather";
 import { PRIVACY_ID } from "@/lib/site";
 import { tourOrder } from "@/lib/tour";
 
@@ -29,6 +31,8 @@ import { PlacesRail } from "./PlacesRail";
 import { PoiSearch } from "./PoiSearch";
 import { useAreaData } from "./useAreaData";
 import { useLang } from "./useLang";
+import { useLightMode } from "./useLightMode";
+import { useWeather } from "./useWeather";
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
@@ -87,6 +91,9 @@ export function MapExplorer({
   const placesId = useId();
 
   const fullscreen = useFullscreen();
+  const light = useLightMode();
+  const [weatherOn, setWeatherOn] = useState(true);
+  const weather = useWeather(weatherOn);
   const { state, retry } = useAreaData(areaId);
   const data = state.status === "ready" ? state.data : null;
   const [filterId, setFilterId] = useState(
@@ -222,6 +229,13 @@ export function MapExplorer({
     if (window.matchMedia("(max-width: 760px)").matches) setRailOpen(false);
   };
 
+  const { mode: lightMode, setMode: setLightMode } = light;
+  const cycleLight = useCallback(() => {
+    const next =
+      LIGHT_MODES[(LIGHT_MODES.indexOf(lightMode) + 1) % LIGHT_MODES.length];
+    setLightMode(next!);
+  }, [lightMode, setLightMode]);
+
   const togglePlaces = useCallback(() => {
     markHintSeen();
     setRailOpen((open) => !open);
@@ -243,6 +257,8 @@ export function MapExplorer({
         searchRef.current?.focus();
       } else if (key === "p") togglePlaces();
       else if (key === "o") setShowOverview((on) => !on);
+      else if (key === "n") cycleLight();
+      else if (key === "w") setWeatherOn((on) => !on);
       else if (key === "a" && hasAi) toggleAi();
       else if (key === "l") setShowLabels((on) => !on);
       else if (key === "t" && animationAvailable) setPlayChoice(!playing);
@@ -254,7 +270,15 @@ export function MapExplorer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasAi, animationAvailable, playing, select, toggleAi, togglePlaces]);
+  }, [
+    hasAi,
+    animationAvailable,
+    playing,
+    select,
+    toggleAi,
+    togglePlaces,
+    cycleLight,
+  ]);
 
   const thumbnailUrl =
     data && selectedPoi?.thumbnail
@@ -343,6 +367,35 @@ export function MapExplorer({
             <span aria-hidden="true">{text.more}</span>
           </button>
           <div ref={menuRef} id={menuId} className="menu" popover="auto">
+            <div
+              className="light"
+              role="group"
+              aria-label={text.lightLabel(bangkokClock(light.now))}
+            >
+              <span className="light__label" aria-hidden="true">
+                {text.light}
+              </span>
+              <div className="light__choices">
+                {LIGHT_MODES.map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className="light__choice"
+                    aria-pressed={light.mode === mode}
+                    aria-label={
+                      mode === "auto" ? text.lightAutoLabel : undefined
+                    }
+                    onClick={() => light.setMode(mode)}
+                  >
+                    {mode === "auto"
+                      ? text.lightAuto
+                      : mode === "day"
+                        ? text.lightDay
+                        : text.lightNight}
+                  </button>
+                ))}
+              </div>
+            </div>
             <ul className="menu__group">
               <li>
                 <button
@@ -383,6 +436,18 @@ export function MapExplorer({
                 >
                   <PixelIcon name="places" />
                   {text.overview}
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="menu__item"
+                  role="switch"
+                  aria-checked={weatherOn}
+                  onClick={() => setWeatherOn(!weatherOn)}
+                >
+                  <PixelIcon name="about" />
+                  {text.liveWeather}
                 </button>
               </li>
             </ul>
@@ -480,6 +545,8 @@ export function MapExplorer({
               playing={playing}
               showLabels={showLabels}
               showOverview={showOverview}
+              sky={light.sky}
+              weather={weather}
               lang={lang}
               tourNumbers={tourNumbers}
               commandsRef={commandsRef}
@@ -513,6 +580,40 @@ export function MapExplorer({
                 onClose={() => select(null)}
               />
             )}
+            {weather && !selectedPoi && (
+              <p
+                className="weather"
+                aria-label={text.weatherLabel(
+                  Math.round(weather.temperatureC).toString(),
+                  text.conditions[weather.condition],
+                  weather.pm25 !== null &&
+                    weather.aqi !== null &&
+                    weather.aqiBand !== null
+                    ? text.airLabel(
+                        Math.round(weather.pm25).toString(),
+                        Math.round(weather.aqi).toString(),
+                        text.aqiBands[weather.aqiBand],
+                      )
+                    : null,
+                )}
+              >
+                <span className="weather__temp" aria-hidden="true">
+                  {Math.round(weather.temperatureC)}°
+                </span>
+                <span aria-hidden="true">
+                  {text.conditions[weather.condition]}
+                </span>
+                {weather.pm25 !== null && weather.aqiBand !== null && (
+                  <span className="weather__air" aria-hidden="true">
+                    <span
+                      className="weather__swatch"
+                      data-band={weather.aqiBand}
+                    />
+                    PM2.5 {Math.round(weather.pm25)}
+                  </span>
+                )}
+              </p>
+            )}
             <p className="credit" data-open={creditsOpen}>
               {data.manifest.attributions.map((attribution, index) => (
                 <span
@@ -525,6 +626,14 @@ export function MapExplorer({
                   </a>
                 </span>
               ))}
+              {weather && (
+                <span className="credit__more">
+                  {", "}
+                  <a href={WEATHER_CREDIT.url} target="_blank" rel="noreferrer">
+                    {WEATHER_CREDIT.text}
+                  </a>
+                </span>
+              )}
               {data.manifest.attributions.length > 1 && (
                 <button
                   type="button"

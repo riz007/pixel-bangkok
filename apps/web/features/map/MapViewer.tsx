@@ -16,10 +16,12 @@ import {
   tileSourceOptions,
   viewportToImage,
 } from "@/lib/coords";
+import type { Sky } from "@/lib/daylight";
 import { type Lang, placeName, STRINGS } from "@/lib/i18n";
 import type { PointOfInterest, TileManifest } from "@/lib/manifest";
 import { parseMotion } from "@/lib/motion";
 import { visibleMarkerIds } from "@/lib/visibility";
+import { cloudFor, hazeFor, type Weather } from "@/lib/weather";
 
 import { categoryInfo } from "./poiCategories";
 import { TrafficLayer } from "./traffic";
@@ -49,6 +51,8 @@ interface MapViewerProps {
   playing: boolean;
   showLabels: boolean;
   showOverview: boolean;
+  sky: Sky;
+  weather: Weather | null;
   lang: Lang;
   tourNumbers: Map<string, number>;
   /** When set, only these places get pins (category filter); null shows all. */
@@ -129,6 +133,8 @@ export function MapViewer({
   playing,
   showLabels,
   showOverview,
+  sky,
+  weather,
   lang,
   tourNumbers,
   visibleIds = null,
@@ -514,6 +520,39 @@ export function MapViewer({
         ref={frontRef}
         className="map__overlay map__overlay--front"
         aria-hidden="true"
+      />
+
+      {weather && (
+        <div
+          className="map__weather"
+          data-condition={weather.condition}
+          aria-hidden="true"
+          style={
+            {
+              "--cloud": cloudFor(weather).toFixed(3),
+              "--haze": hazeFor(weather.pm25).toFixed(3),
+            } as CSSProperties
+          }
+        >
+          {(weather.condition === "drizzle" ||
+            weather.condition === "rain" ||
+            weather.condition === "storm") && <span className="map__rain" />}
+        </div>
+      )}
+
+      <div
+        className="map__sky"
+        data-phase={sky.phase}
+        aria-hidden="true"
+        style={
+          {
+            "--darkness": sky.darkness.toFixed(3),
+            "--warmth": (sky.phase === "dusk" || sky.phase === "dawn"
+              ? 1 - Math.abs(2 * sky.darkness - 1)
+              : 0
+            ).toFixed(3),
+          } as CSSProperties
+        }
       />
 
       <div className="map__markers">
