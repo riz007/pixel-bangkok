@@ -14,9 +14,10 @@ import { imageToLonLat, lonLatToImage, type Point } from "@/lib/coords";
 import { bangkokClock, LIGHT_MODES } from "@/lib/daylight";
 import { filterPlaces, findFilter } from "@/lib/filters";
 import { STRINGS } from "@/lib/i18n";
-import { WEATHER_CREDIT } from "@/lib/weather";
+import type { PointOfInterest } from "@/lib/manifest";
 import { PRIVACY_ID } from "@/lib/site";
 import { tourOrder } from "@/lib/tour";
+import { WEATHER_CREDIT } from "@/lib/weather";
 
 import { AboutDialog } from "./AboutDialog";
 import { ConsentBanner } from "./ConsentBanner";
@@ -54,12 +55,15 @@ interface MapExplorerProps {
   initialAreaId: string | null;
   initialPlaceId: string | null;
   initialFilter: string | null;
+  /** The linked place's card, read on the server, shown until the map data arrives. */
+  initialPlace?: { poi: PointOfInterest; thumbnailUrl: string | null } | null;
 }
 
 export function MapExplorer({
   initialAreaId,
   initialPlaceId,
   initialFilter,
+  initialPlace = null,
 }: MapExplorerProps) {
   const [lang, setLang] = useLang();
   const text = STRINGS[lang];
@@ -530,6 +534,15 @@ export function MapExplorer({
               {text.tryAgain}
             </button>
           </div>
+        )}
+        {!data && initialPlace && initialPlace.poi.id === selectedPoiId && (
+          <PlacePanel
+            poi={initialPlace.poi}
+            number={undefined}
+            lang={lang}
+            thumbnailUrl={initialPlace.thumbnailUrl}
+            onClose={() => select(null)}
+          />
         )}
         {data && (
           <>

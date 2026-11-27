@@ -359,6 +359,7 @@ PYRAMID_DIRS = {
     "tiles": "tiles",
     "overlay": "overlay",
     "front_overlay": "front",
+    "lights": "lights",
     "ai_tiles": "ai",
     "ai_overlay_tiles": "ai_overlay",
     "ai_front_overlay_tiles": "ai_front",
@@ -444,6 +445,21 @@ def run(
         )
     elif (build_dir / "front_overlay").exists():
         shutil.rmtree(build_dir / "front_overlay")
+    has_lights = all((blocks_dir / f"lights_{block.name}.png").exists() for block in blocks)
+    if has_lights and reuse:
+        has_lights = (build_dir / "lights").exists()
+    elif has_lights:
+        write_pyramid_blocks(
+            loaders("lights", "RGBA"),
+            width,
+            height,
+            "RGBA",
+            build_dir / "lights",
+            render.tiles,
+            build_dir / ".lights-work",
+        )
+    elif (build_dir / "lights").exists():
+        shutil.rmtree(build_dir / "lights")
     has_ai = all((blocks_dir / f"ai_master_{block.name}.png").exists() for block in blocks)
     has_ai_front = has_ai and all(
         (blocks_dir / f"ai_front_overlay_{block.name}.png").exists() for block in blocks
@@ -492,6 +508,8 @@ def run(
         animation["overlay_url_template"] = "overlay/{level}/{column}_{row}.{format}"
     if has_front:
         animation["front_url_template"] = "front/{level}/{column}_{row}.{format}"
+    if has_lights:
+        animation["lights_url_template"] = "lights/{level}/{column}_{row}.{format}"
     if (processed_dir / "motion.json").exists():
         animation["motion_url"] = "motion.json"
     if animation:

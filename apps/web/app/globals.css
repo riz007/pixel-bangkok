@@ -905,9 +905,15 @@ kbd {
   opacity: calc(var(--warmth, 0) * 0.42);
 }
 
+/* Lit windows sit above the night tint, so they glow instead of being dimmed with the city. */
+.map__lights {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .map__sky::before,
-  .map__sky::after {
+  .map__sky::after,
+  .map__lights {
     transition: opacity 1.2s ease-out;
   }
 }

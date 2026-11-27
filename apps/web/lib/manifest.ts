@@ -33,6 +33,7 @@ export interface TileManifest {
   animation: {
     overlayUrlTemplate: string | null;
     frontUrlTemplate: string | null;
+    lightsUrlTemplate: string | null;
     motionUrl: string | null;
   } | null;
   ai: {
@@ -300,6 +301,11 @@ export function parseManifest(input: unknown): TileManifest {
             frontUrlTemplate: optionalText(
               value,
               "front_url_template",
+              "manifest.animation",
+            ),
+            lightsUrlTemplate: optionalText(
+              value,
+              "lights_url_template",
               "manifest.animation",
             ),
             motionUrl: optionalText(value, "motion_url", "manifest.animation"),

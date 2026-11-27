@@ -119,6 +119,8 @@
     "temple_trim": "#e8b83a",
     "tree_dark": "#2f5f2e",
     "window_light": "#8fa6bf",
+    "window_lit": "#ffcf6e",
+    "window_lit_soft": "#f3a957",
     "contact_shadow": "#00000038",
     "terrain_dither": "#bdb49c",
     "roof_dither": "#d9cdb8",

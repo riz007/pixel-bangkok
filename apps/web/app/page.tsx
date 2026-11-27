@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { MapExplorer } from "@/features/map/MapExplorer";
-import { areas, places } from "@/lib/server-data";
+import { areas, canonicalArea, placeCard, places } from "@/lib/server-data";
 import {
   clip,
   DESCRIPTION,
@@ -35,14 +35,18 @@ export async function generateMetadata({
   const published = await areas();
   const area = published.find((entry) => entry.id === areaId) ?? published[0];
   if (!area) return {};
-  const query = new URLSearchParams({
-    area: area.id,
-    ...(placeId ? { place: placeId } : {}),
-  });
-  const canonical = `/?${query.toString()}`;
   const place = placeId
     ? (await places(area.id)).find((entry) => entry.id === placeId)
     : null;
+  // A place shown in several areas has one canonical address, so Google indexes it once.
+  const canonicalAreaId = place
+    ? ((await canonicalArea(place.id)) ?? area.id)
+    : area.id;
+  const query = new URLSearchParams({
+    area: canonicalAreaId,
+    ...(place ? { place: place.id } : {}),
+  });
+  const canonical = `/?${query.toString()}`;
   if (place) {
     const bilingual = place.name_th
       ? `${place.name_en} · ${place.name_th}`
@@ -103,11 +107,17 @@ export async function generateMetadata({
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const { area, place, filter } = await searchParams;
+  const areaId = single(area);
+  const placeId = single(place);
+  const firstArea = areaId ?? (await areas())[0]?.id ?? null;
+  const initialPlace =
+    firstArea && placeId ? await placeCard(firstArea, placeId) : null;
   return (
     <MapExplorer
-      initialAreaId={single(area)}
-      initialPlaceId={single(place)}
+      initialAreaId={areaId}
+      initialPlaceId={placeId}
       initialFilter={single(filter)}
+      initialPlace={initialPlace}
     />
   );
 }

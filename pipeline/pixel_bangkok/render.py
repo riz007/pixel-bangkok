@@ -36,6 +36,11 @@ from .projection import IsoProjection
 
 log = logging.getLogger(__name__)
 
+LIT_WINDOWS_PER_MILLE = 420
+"""Share of drawn windows that glow at night. Which ones is a fixed hash of the building's
+source ID and the window's position, so the same windows are lit on every render; the lights are
+an evening atmosphere on their own layer, never part of the map."""
+
 LAYER_ORDER = (
     "terrain",
     "ground",
@@ -1205,19 +1210,35 @@ class SceneRenderer:
             )
         }
 
+    def lit_windows(self, primitives: list[Primitive], source_id: str) -> list[Primitive]:
+        """The drawn windows of one building that are lit at night, in a warm or a softer glow."""
+        lit = []
+        index = 0
+        for primitive in primitives:
+            if primitive.kind != "polygon" or not (primitive.fill or "").endswith("window"):
+                continue
+            index += 1
+            roll = zlib.crc32(f"{source_id}:{index}".encode()) % 1000
+            if roll < LIT_WINDOWS_PER_MILLE:
+                fill = "window_lit" if roll % 3 else "window_lit_soft"
+                lit.append(Primitive("polygon", fill, points=primitive.points))
+        return lit
+
     def buildings_and_vegetation(
         self,
         buildings: list[tuple[BaseGeometry, dict]],
         trees: list[tuple[BaseGeometry, dict]],
         decks: list[Deck] = (),  # type: ignore[assignment]
         parts: dict[str, list[tuple[Polygon, dict]]] | None = None,
-    ) -> tuple[Image.Image, Image.Image, Image.Image]:
-        """Buildings, vegetation and `front`: what stands in front of an elevated deck.
+    ) -> tuple[Image.Image, Image.Image, Image.Image, Image.Image]:
+        """Buildings, vegetation, `front` (what stands in front of an elevated deck) and `lights`
+        (lit windows at night, hidden behind whatever is drawn in front of them).
 
         `parts`: building:part pieces by building source_id (see `parts_by_building`).
         """
         parts = parts or {}
         building_layer, vegetation_layer, front = self._blank(), self._blank(), self._blank()
+        lights = self._blank()
         matrix = self.projection.screen_ground_matrix()
         lift_per_metre = self.cos_elevation * self.config.pixels_per_metre
         items: list[tuple[str, Any, dict]] = []
@@ -1258,6 +1279,7 @@ class SceneRenderer:
                 self.paint(building_layer, primitives)
                 self.paint(vegetation_layer, primitives, erase=True)
                 self.paint(front, primitives, erase=True)
+                self.paint(lights, primitives, erase=True)
                 deck_cells |= self._cells(primitives, TRAIN_CLEARANCE_PX)
                 continue
             if kind in {"building", "parts"}:
@@ -1268,12 +1290,15 @@ class SceneRenderer:
                 )
                 self.paint(building_layer, primitives)
                 self.paint(vegetation_layer, primitives, erase=True)
+                self.paint(lights, primitives, erase=True)
+                self.paint(lights, self.lit_windows(primitives, properties["source_id"]))
             else:
                 primitives = self.tree(geometry, properties)
                 self.paint(vegetation_layer, primitives)
+                self.paint(lights, primitives, erase=True)
             if deck_cells and not deck_cells.isdisjoint(self._cells(primitives)):
                 self.paint(front, primitives)
-        return building_layer, vegetation_layer, front
+        return building_layer, vegetation_layer, front, lights
 
 
 def render_layers(
@@ -1287,7 +1312,7 @@ def render_layers(
     rail = layers.get("rail", [])
     decks = scene.decks(layers["roads"], rail)
     parts = parts_by_building(layers["buildings"], layers.get("building_parts", []))
-    buildings, vegetation, front = scene.buildings_and_vegetation(
+    buildings, vegetation, front, lights = scene.buildings_and_vegetation(
         layers["buildings"], layers["trees"], decks, parts
     )
     # A building drawn from parts casts each part's shadow, not its outline's.
@@ -1309,6 +1334,7 @@ def render_layers(
         "buildings": buildings,
         "vegetation": vegetation,
         "front": front,
+        "lights": lights,
     }
 
 

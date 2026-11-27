@@ -9,6 +9,7 @@ Files in build/<area>/blocks/:
 - render_<bx>_<by>.png: composited procedural render (RGB).
 - occlusion_<bx>_<by>.png: 1-bit mask of building, tree and viaduct pixels.
 - front_<bx>_<by>.png: 1-bit mask of building and tree pixels in front of a viaduct.
+- lights_<bx>_<by>.png: lit windows at night (RGBA), for the viewer's night layer.
 - master_<bx>_<by>.png, overlay_<bx>_<by>.png: written by the style stage.
 """
 
@@ -161,7 +162,8 @@ def render_blocks(
     started = time.monotonic()
     for number, block in enumerate(blocks, start=1):
         outputs = [
-            blocks_dir / f"{kind}_{block.name}.png" for kind in ("render", "occlusion", "front")
+            blocks_dir / f"{kind}_{block.name}.png"
+            for kind in ("render", "occlusion", "front", "lights")
         ]
         if resume and all(path.exists() for path in outputs):
             continue
@@ -172,6 +174,7 @@ def render_blocks(
         Image.fromarray(occlusion).save(blocks_dir / f"occlusion_{block.name}.png")
         front = np.asarray(drawn["front"])[..., 3] > 0
         Image.fromarray(front).save(blocks_dir / f"front_{block.name}.png")
+        drawn["lights"].save(blocks_dir / f"lights_{block.name}.png")
         partial = blocks_dir / f"render_{block.name}.partial.png"
         composite(drawn, background).save(partial)
         partial.replace(blocks_dir / f"render_{block.name}.png")

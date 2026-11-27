@@ -196,6 +196,13 @@ def run(render: RenderConfig, build_dir: Path, area: AreaConfig | None = None) -
         cover = dissolve & inside_area(bounds, render, box) if bounds is not None else dissolve
         master = faded(master, dissolve, render)
         master.save(blocks_dir / f"master_{block.name}.png")
+        lights_path = blocks_dir / f"lights_{block.name}.png"
+        if lights_path.exists():
+            # No lights where the map dissolves into the background at its edge.
+            with Image.open(lights_path) as lights:
+                pixels = np.array(lights.convert("RGBA"))
+            pixels[dissolve] = 0
+            Image.fromarray(pixels, "RGBA").save(lights_path)
         with Image.open(blocks_dir / f"occlusion_{block.name}.png") as occlusion:
             mask = np.asarray(occlusion.convert("1")) | cover
         overlay_from_mask(master, mask).save(blocks_dir / f"overlay_{block.name}.png")

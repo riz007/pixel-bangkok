@@ -155,6 +155,9 @@ export function MapViewer({
   const scalingRef = useRef<(() => void) | null>(null);
   const overlayViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const frontViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+  const lightsRef = useRef<HTMLDivElement>(null);
+  const startLightsRef = useRef<(() => void) | null>(null);
+  const darknessRef = useRef(sky.darkness);
   const upperRef = useRef<HTMLCanvasElement>(null);
   const frontRef = useRef<HTMLDivElement>(null);
   const navigatorId = `map-navigator-${useId().replace(/:/g, "")}`;
@@ -180,6 +183,7 @@ export function MapViewer({
     let viewer: OpenSeadragon.Viewer | null = null;
     let overlay: OpenSeadragon.Viewer | null = null;
     let front: OpenSeadragon.Viewer | null = null;
+    let lights: OpenSeadragon.Viewer | null = null;
     let navigatorObserver: ResizeObserver | null = null;
     setStatus("loading");
     setFailedTiles(0);
@@ -345,7 +349,6 @@ export function MapViewer({
         const animation = manifest.animation;
         const canvas = animationRef.current;
         const overlayContainer = overlayRef.current;
-        if (!animation?.motionUrl || !canvas || !overlayContainer) return;
         const follow = (element: HTMLElement, template: string) => {
           const follower: OpenSeadragon.Viewer = OSD({
             element,
@@ -388,6 +391,14 @@ export function MapViewer({
           smoothing = null;
           return follower;
         };
+        // Lit windows load only once it is dark, so daytime visitors never fetch them.
+        startLightsRef.current = () => {
+          const lightsTemplate = animation?.lightsUrlTemplate;
+          if (lights || !lightsTemplate || !lightsRef.current) return;
+          lights = follow(lightsRef.current, lightsTemplate);
+        };
+        if (darknessRef.current > 0) startLightsRef.current();
+        if (!animation?.motionUrl || !canvas || !overlayContainer) return;
         const template = overlayTemplate(manifest, aiOnRef.current);
         if (template) {
           overlay = follow(overlayContainer, template);
@@ -437,8 +448,10 @@ export function MapViewer({
       trafficRef.current = null;
       overlayViewerRef.current = null;
       frontViewerRef.current = null;
+      startLightsRef.current = null;
       overlay?.destroy();
       front?.destroy();
+      lights?.destroy();
       navigatorObserver?.disconnect();
       viewer?.destroy();
     };
@@ -471,6 +484,11 @@ export function MapViewer({
     swap(frontViewerRef.current, frontTemplate(manifest, aiOn));
     scalingRef.current?.();
   }, [aiOn, manifest, baseUrl]);
+
+  useEffect(() => {
+    darknessRef.current = sky.darkness;
+    if (sky.darkness > 0) startLightsRef.current?.();
+  }, [sky.darkness]);
 
   useEffect(() => {
     playingRef.current = playing;
@@ -553,6 +571,13 @@ export function MapViewer({
             ).toFixed(3),
           } as CSSProperties
         }
+      />
+
+      <div
+        ref={lightsRef}
+        className="map__overlay map__lights"
+        aria-hidden="true"
+        style={{ opacity: sky.darkness }}
       />
 
       <div className="map__markers">

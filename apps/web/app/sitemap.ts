@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { areas, places } from "@/lib/server-data";
+import { areas, canonicalPlaces } from "@/lib/server-data";
 import { absolute } from "@/lib/site";
 
 export const revalidate = 3600;
@@ -17,15 +17,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.8,
     });
-    for (const place of await places(area.id)) {
-      entries.push({
-        url: absolute(
-          `/?area=${area.id}&amp;place=${encodeURIComponent(place.id)}`,
-        ),
-        changeFrequency: "monthly",
-        priority: 0.5,
-      });
-    }
+  }
+  // Each place once, at its canonical address; the same place in other areas is not listed.
+  for (const { areaId, place } of await canonicalPlaces()) {
+    entries.push({
+      url: absolute(
+        `/?area=${areaId}&amp;place=${encodeURIComponent(place.id)}`,
+      ),
+      changeFrequency: "monthly",
+      priority: 0.5,
+    });
   }
   return entries;
 }

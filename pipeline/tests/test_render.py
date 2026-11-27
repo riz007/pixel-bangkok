@@ -1,6 +1,7 @@
 import io
 
 import pytest
+from shapely.affinity import translate
 from shapely.geometry import Point, box, shape
 
 from pixel_bangkok.heights import derive_height, roof_shape
@@ -128,7 +129,7 @@ def test_trees_are_hidden_behind_buildings_and_shown_in_front(bounds, render_con
     behind = _tree(38, 62, "behind")
     in_front = _tree(62, 38, "front")
     assert scene.projection.depth(38, 62) > scene.projection.depth(50, 50)
-    buildings, vegetation, _ = scene.buildings_and_vegetation([_building()], [behind, in_front])
+    buildings, vegetation, _, _ = scene.buildings_and_vegetation([_building()], [behind, in_front])
 
     def crown_pixel(tree):
         point, properties = tree
@@ -307,3 +308,42 @@ def test_a_plinth_is_drawn_before_the_turret_standing_on_it(bounds, render_confi
     tops = [p.z for p in primitives if p.kind == "area"]
     assert tops[0] == 1.0 and tops[-1] == 7.0
     assert not any(p.fill and "window" in p.fill for p in primitives)
+
+
+def test_lit_windows_sit_on_drawn_windows_and_repeat_every_render(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    polygon, properties = _building()
+    tall = properties | {"render_height_m": 24.0}
+    primitives = scene.building(polygon, tall)
+    windows = {
+        primitive.points
+        for primitive in primitives
+        if primitive.kind == "polygon" and (primitive.fill or "").endswith("window")
+    }
+    lit = scene.lit_windows(primitives, tall["source_id"])
+    assert 0 < len(lit) < len(windows)
+    assert {primitive.points for primitive in lit} <= windows
+    assert {primitive.fill for primitive in lit} <= {"window_lit", "window_lit_soft"}
+    again = scene.lit_windows(scene.building(polygon, tall), tall["source_id"])
+    assert [primitive.points for primitive in again] == [primitive.points for primitive in lit]
+
+
+def test_lit_windows_are_hidden_by_what_stands_in_front(bounds, render_config):
+    scene = SceneRenderer(bounds, render_config)
+    polygon, properties = _building()
+    tall = properties | {"render_height_m": 24.0}
+    _, _, _, open_view = scene.buildings_and_vegetation([(polygon, tall)], [])
+    lit = scene.lit_windows(scene.building(polygon, tall), tall["source_id"])
+    pixels = [
+        (round(sum(x for x, _ in p.points) / 4), round(sum(y for _, y in p.points) / 4))
+        for p in lit
+    ]
+    assert any(open_view.getpixel(pixel)[3] == 255 for pixel in pixels)
+    # A tall building right in front of the facade hides its lights.
+    blocker = (
+        translate(polygon, 14, -14),
+        tall | {"source_id": "way/front", "render_height_m": 40.0},
+    )
+    _, _, _, hidden = scene.buildings_and_vegetation([(polygon, tall), blocker], [])
+    shown = sum(hidden.getpixel(pixel)[3] == 255 for pixel in pixels)
+    assert shown < sum(open_view.getpixel(pixel)[3] == 255 for pixel in pixels)

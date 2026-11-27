@@ -165,7 +165,7 @@ def _bts():
 def test_deck_is_drawn_at_its_elevation(bounds, render_config):
     scene = SceneRenderer(bounds, render_config)
     decks = scene.decks([_expressway()], [])
-    buildings, _, _ = scene.buildings_and_vegetation([], [], decks)
+    buildings, _, _, _ = scene.buildings_and_vegetation([], [], decks)
     x, y = scene.projection.world_to_native(100, 50, 10.0)
     assert (
         buildings.getpixel((round(x), round(y)))[:3]
@@ -199,7 +199,7 @@ def test_front_mask_holds_buildings_in_front_of_a_deck_only(bounds, render_confi
         box(back_x, 60, back_x + 8, 70),
         {"source_id": "way/11", "render_height_m": 30.0, "is_temple": False, "roof_shape": "flat"},
     )
-    _, _, front = scene.buildings_and_vegetation([front_building, back_building], [], decks)
+    _, _, front, _ = scene.buildings_and_vegetation([front_building, back_building], [], decks)
     fx, fy = scene.projection.world_to_native(front_x + 4, 30, 25.0)
     bx, by = scene.projection.world_to_native(back_x + 4, 65, 25.0)
     assert front.getpixel((round(fx), round(fy)))[3] == 255

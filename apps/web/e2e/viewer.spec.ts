@@ -684,3 +684,60 @@ test("the map works the same when the weather service is down", async ({
   await expect(page.locator(".weather")).toHaveCount(0);
   await expect(page.locator(".marker").first()).toBeVisible();
 });
+
+test("lit windows load only after dark and fade in with the night", async ({
+  page,
+}) => {
+  const manifest = await (
+    await page.request.get("/maps/old-town/manifest.json")
+  ).json();
+  test.skip(
+    !manifest.animation?.lights_url_template,
+    "no lights layer published for old-town",
+  );
+  const requests: string[] = [];
+  page.on("request", (request) =>
+    requests.push(new URL(request.url()).pathname),
+  );
+  await page.clock.install({ time: new Date("2026-11-27T12:00:00+07:00") });
+  await page.goto("/?area=old-town");
+  await expect(page.locator(".map")).toHaveAttribute("data-status", "ready");
+  const lights = page.locator(".map__lights");
+  await expect(lights).toHaveCSS("opacity", "0");
+  expect(
+    requests.some((path) => path.startsWith("/maps/old-town/lights/")),
+  ).toBe(false);
+  await page.keyboard.press("n");
+  await page.keyboard.press("n");
+  await expect(page.locator(".map__sky")).toHaveAttribute(
+    "data-phase",
+    "night",
+  );
+  await expect
+    .poll(() =>
+      requests.some((path) => path.startsWith("/maps/old-town/lights/")),
+    )
+    .toBe(true);
+  await expect(lights.locator("canvas")).toHaveCount(1);
+});
+
+test.describe("without JavaScript", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("a place link already carries the place's card for search engines", async ({
+    page,
+  }) => {
+    await page.goto("/?area=old-town&place=democracy-monument");
+    const card = page.getByRole("complementary");
+    await expect(
+      card.getByRole("heading", {
+        name: /Democracy Monument|อนุสาวรีย์ประชาธิปไตย/,
+      }),
+    ).toBeVisible();
+    await expect(card).toContainText("13.75667");
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      "href",
+      /\?area=bangkok&place=democracy-monument$/,
+    );
+  });
+});

@@ -118,6 +118,70 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   );
 }
 
+/** The open datasets the map is built from, as Google's Dataset structured data expects them:
+ * every Dataset needs a description, and a creator is recommended. */
+const SOURCES = [
+  {
+    name: "OpenStreetMap",
+    description:
+      "Collaborative open map of the world. Pixel Bangkok draws its roads, canals, railways, " +
+      "landmarks and mapped buildings from it.",
+    url: "https://www.openstreetmap.org/copyright",
+    license: "https://opendatacommons.org/licenses/odbl/",
+    creator: "OpenStreetMap contributors",
+    creatorUrl: "https://www.openstreetmap.org/",
+  },
+  {
+    name: "Overture Maps buildings",
+    description:
+      "Building outlines combining OpenStreetMap with outlines traced from imagery by Google " +
+      "and Microsoft. Used for buildings OpenStreetMap has not mapped yet.",
+    url: "https://docs.overturemaps.org/attribution/",
+    license: "https://opendatacommons.org/licenses/odbl/",
+    creator: "Overture Maps Foundation",
+    creatorUrl: "https://overturemaps.org/",
+  },
+  {
+    name: "Google Open Buildings 2.5D Temporal",
+    description:
+      "Satellite-derived building presence and height rasters. Used to estimate the height of " +
+      "buildings without a published height.",
+    url: "https://sites.research.google/gr/open-buildings/temporal/",
+    license: "https://creativecommons.org/licenses/by/4.0/",
+    creator: "Google Research",
+    creatorUrl: "https://research.google/",
+  },
+  {
+    name: "Meta and WRI High Resolution Canopy Height Maps",
+    description:
+      "Global tree canopy height at about 1 m resolution. Used to place and size every tree on " +
+      "the map.",
+    url: "https://registry.opendata.aws/dataforgood-fb-forests/",
+    license: "https://creativecommons.org/licenses/by/4.0/",
+    creator: "Meta and World Resources Institute",
+    creatorUrl: "https://www.wri.org/",
+  },
+  {
+    name: "Wikidata",
+    description:
+      "Free knowledge base. Used for place names, descriptions and the heights of some towers.",
+    url: "https://www.wikidata.org/",
+    license: "https://creativecommons.org/publicdomain/zero/1.0/",
+    creator: "Wikidata contributors",
+    creatorUrl: "https://www.wikidata.org/",
+  },
+  {
+    name: "Open-Meteo weather and air quality",
+    description:
+      "Modelled current weather and air quality, including PM2.5 from the Copernicus " +
+      "Atmosphere Monitoring Service, shown live on the map.",
+    url: "https://open-meteo.com/",
+    license: "https://creativecommons.org/licenses/by/4.0/",
+    creator: "Open-Meteo",
+    creatorUrl: "https://open-meteo.com/",
+  },
+];
+
 function structuredData() {
   const site = { "@type": "WebSite", "@id": `${SITE_URL}/#website`, url: SITE_URL, name: SITE_NAME };
   const map = {
@@ -141,12 +205,14 @@ function structuredData() {
       name: "Bangkok (Krung Thep Maha Nakhon), Thailand",
       geo: { "@type": "GeoShape", box: "13.67 100.46 13.85 100.65" },
     },
-    isBasedOn: [
-      { "@type": "Dataset", name: "OpenStreetMap", url: "https://www.openstreetmap.org/copyright", license: "https://opendatacommons.org/licenses/odbl/" },
-      { "@type": "Dataset", name: "Google Open Buildings 2.5D Temporal", license: "https://creativecommons.org/licenses/by/4.0/" },
-      { "@type": "Dataset", name: "Meta and WRI High Resolution Canopy Height Maps", license: "https://creativecommons.org/licenses/by/4.0/" },
-      { "@type": "Dataset", name: "Wikidata", license: "https://creativecommons.org/publicdomain/zero/1.0/" },
-    ],
+    isBasedOn: SOURCES.map((source) => ({
+      "@type": "Dataset",
+      name: source.name,
+      description: source.description,
+      url: source.url,
+      license: source.license,
+      creator: { "@type": "Organization", name: source.creator, url: source.creatorUrl },
+    })),
     ...(REPO_URL ? { codeRepository: REPO_URL } : {}),
     ...(MAKER_NAME ? { creator: { "@type": "Person", name: MAKER_NAME } } : {}),
   };
